@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MicroVMs, eBPF, and AI Agents in Telecom Infrastructure</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAFAF8;
+    --ink:#1F2328;
+    --muted:#6B6560;
+    --rule:#E4E1DC;
+    --red:#B90E0A;
+    --red-soft:rgba(185,14,10,0.06);
+    --red-soft-2:rgba(185,14,10,0.14);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--paper); }
+  body{ font-family:'Inter', sans-serif; color:var(--ink); min-height:100vh; }
+
+  .page{ max-width:1040px; margin:0 auto; padding:56px 32px 100px; }
+  .col{ max-width:none; }
+
+  .kicker{ font-size:12px; letter-spacing:.04em; color:var(--red); font-weight:600; margin:0 0 14px; }
+  h1{ font-size:38px; font-weight:600; line-height:1.18; margin:0 0 18px; }
+
+  .byline{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 28px;
+    letter-spacing:.01em;
+  }
+  .byline b{ color:var(--ink); font-weight:500; }
+
+  .intro p{ font-size:15.5px; line-height:1.75; color:var(--muted); margin:0 0 16px; }
+  .intro{ margin-bottom:24px; }
+  .intro code{
+    font-family:'IBM Plex Mono', monospace; background:var(--red-soft); color:var(--red);
+    padding:1px 5px; border-radius:3px; font-size:0.9em;
+  }
+
+  .skip-note{
+    font-size:14px; line-height:1.6; color:var(--ink);
+    background:var(--red-soft); border:1px solid var(--red-soft-2);
+    border-radius:6px; padding:14px 16px; margin:0 0 52px;
+  }
+  .skip-note b{ color:var(--red); font-weight:600; }
+
+  /* the map: a scattered, winding trail through the episodes */
+  .map-wrap{
+    position:relative;
+    margin:0 0 56px;
+  }
+  .map-svg{ width:100%; height:auto; display:block; overflow:visible; }
+  .trail-path{
+    fill:none; stroke:var(--rule); stroke-width:3; stroke-linecap:round; stroke-dasharray:1 11;
+  }
+  .trail-marker{
+    fill:var(--red); opacity:0; transition:opacity .2s ease;
+    filter:drop-shadow(0 0 5px rgba(185,14,10,0.5));
+  }
+  .trail-marker.show{ opacity:1; }
+
+  .node{ cursor:pointer; }
+  .node-dot{
+    fill:#fff; stroke:var(--rule); stroke-width:1.6;
+    transition:stroke .2s ease, fill .2s ease, r .2s ease;
+  }
+  .node-num{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; font-weight:600;
+    fill:var(--muted); text-anchor:middle; pointer-events:none;
+    transition:fill .2s ease;
+  }
+  .node-label{
+    font-family:'Inter', sans-serif; font-size:11.5px; font-weight:500;
+    fill:var(--muted); text-anchor:middle; pointer-events:none;
+    transition:fill .2s ease;
+  }
+
+  .node.active .node-dot{ r:20; stroke:var(--red); fill:#FDEEEC; }
+  .node.active .node-num{ fill:var(--red); }
+  .node.active .node-label{ fill:var(--ink); font-weight:600; }
+
+  .node-tooltip{
+    position:absolute;
+    left:0; top:0;
+    transform:translate(-50%, calc(-100% - 14px));
+    background:#fff;
+    border:1px solid var(--rule);
+    border-radius:6px;
+    padding:10px 14px;
+    max-width:220px;
+    box-shadow:0 8px 20px -8px rgba(0,0,0,0.18);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .15s ease;
+    z-index:5;
+  }
+  .node-tooltip.show{ opacity:1; }
+  .tt-title{ font-size:13px; font-weight:600; color:var(--ink); margin:0 0 4px; }
+  .tt-summary{ font-size:12px; line-height:1.5; color:var(--muted); margin:0; }
+
+  /* detail list */
+  .ep{ position:relative; padding:18px 0; border-top:1px solid var(--rule); scroll-margin-top:24px; transition:background .4s ease; }
+  .ep.flash{ background:var(--red-soft); }
+
+  .ep-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+  .ep-num{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--muted); }
+  .ep.available .ep-num{ color:var(--red); }
+  .ep-title{ font-size:16.5px; font-weight:600; margin:0; }
+  .ep.available .ep-title{ color:var(--ink); }
+  .ep:not(.available) .ep-title{ color:var(--muted); }
+
+  .tag{
+    font-size:10.5px; letter-spacing:.04em; text-transform:uppercase; font-weight:600;
+    padding:2px 8px; border-radius:10px; white-space:nowrap;
+  }
+  .tag-status-available{ color:var(--red); background:var(--red-soft); }
+  .tag-status-soon{ color:var(--muted); background:var(--rule); }
+
+  .ep-blurb{ font-size:14px; line-height:1.65; color:var(--muted); margin:0 0 8px; }
+
+  .ep-link{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:13px; font-weight:500; color:var(--red);
+    text-decoration:none; border-bottom:1px solid var(--red-soft-2);
+    padding-bottom:1px;
+  }
+  .ep-link:hover{ border-bottom-color:var(--red); }
+
+  /* about the author */
+  .about{
+    margin-top:56px;
+    padding-top:32px;
+    border-top:1px solid var(--rule);
+    display:flex;
+    gap:18px;
+  }
+  .avatar{
+    flex-shrink:0;
+    width:52px; height:52px; border-radius:50%;
+    background:var(--red-soft);
+    border:1px solid var(--red-soft-2);
+    color:var(--red);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:15px; font-weight:600;
+  }
+  .about-body .about-kicker{
+    font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--red); font-weight:600; margin:0 0 8px;
+  }
+  .about-name{ font-size:16px; font-weight:600; margin:0 0 6px; }
+  .about-bio{ font-size:14px; line-height:1.7; color:var(--muted); margin:0; }
+
+  .footer-note{ margin-top:40px; padding-top:20px; border-top:1px solid var(--rule); font-size:12.5px; color:var(--muted); line-height:1.6; }
+
+  @media (max-width:720px){
+    .page{ padding:40px 20px 80px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="col">
+    <div class="kicker">Telco infrastructure in practice</div>
+    <h1>MicroVMs, eBPF, and AI Agents in Telecom Infrastructure</h1>
+    <p class="byline" id="byline"><b>Dr. Afaf Arfaoui</b> · September 09, 2026 · <span id="readTime">…</span></p>
+
+    <div class="intro" id="introText">
+      <p>This series is about watching several technologies (microVMs, eBPF, and AI agents) actually work together in telecom infrastructure, through real working examples rather than abstract descriptions. Along the way, episodes explain just enough of the underlying tech to make sense of what is happening, then build on it.</p>
+      <p>It begins with the microVM, what one actually is, and how to deploy it by hand. From there it moves through handing that deployment to an AI agent, and eventually running and monitoring a real telecom workload, an eBPF-based UPF, inside one of these microVMs.</p>
+    </div>
+  </div>
+
+  <div class="map-wrap" id="mapWrap">
+    <svg class="map-svg" id="mapSvg" viewBox="0 0 960 460" preserveAspectRatio="xMidYMid meet">
+      <path class="trail-path" id="trailPath" d=""></path>
+      <circle class="trail-marker" id="trailMarker" r="5"></circle>
+
+      <g class="node" data-target="ep-01" data-cx="90" data-cy="70" data-title="What is a microVM?" data-summary="What a microVM actually is, and how it differs from a conventional VM and from a container.">
+        <circle class="node-dot" cx="90" cy="70" r="16"></circle>
+        <text class="node-num" x="90" y="74">01</text>
+        <text class="node-label" x="90" y="102">What's a microVM?</text>
+      </g>
+
+      <g class="node" data-target="ep-02" data-cx="300" data-cy="45" data-title="Deploy a microVM" data-summary="Deploying a microVM by hand, step by step, and the network architecture behind it: bridges, TAP interfaces, and NAT.">
+        <circle class="node-dot" cx="300" cy="45" r="16"></circle>
+        <text class="node-num" x="300" y="49">02</text>
+        <text class="node-label" x="300" y="77">Deploy a microVM</text>
+      </g>
+
+      <g class="node" data-target="ep-03" data-cx="500" data-cy="100" data-title="Deploy a microVM with an AI agent" data-summary="Handing that same deployment over to an AI agent, end to end.">
+        <circle class="node-dot" cx="500" cy="100" r="16"></circle>
+        <text class="node-num" x="500" y="104">03</text>
+        <text class="node-label" x="500" y="132">Deploy with an AI agent</text>
+      </g>
+
+      <g class="node" data-target="ep-04" data-cx="700" data-cy="55" data-title="What is a UPF, and how does an eUPF differ?" data-summary="What a UPF actually does, and how an eBPF-based eUPF takes a different approach.">
+        <circle class="node-dot" cx="700" cy="55" r="16"></circle>
+        <text class="node-num" x="700" y="59">04</text>
+        <text class="node-label" x="700" y="87">What's a UPF?</text>
+      </g>
+
+      <g class="node" data-target="ep-05" data-cx="850" data-cy="190" data-title="Basic eBPF knowledge" data-summary="Just enough eBPF to understand what is coming next, no more, no less.">
+        <circle class="node-dot" cx="850" cy="190" r="16"></circle>
+        <text class="node-num" x="850" y="194">05</text>
+        <text class="node-label" x="850" y="222">Basic eBPF</text>
+      </g>
+
+      <g class="node" data-target="ep-06" data-cx="640" data-cy="240" data-title="How eUPF actually works" data-summary="Inside the eUPF: its architecture, and how it puts eBPF to work.">
+        <circle class="node-dot" cx="640" cy="240" r="16"></circle>
+        <text class="node-num" x="640" y="244">06</text>
+        <text class="node-label" x="640" y="272">How eUPF works</text>
+      </g>
+
+      <g class="node" data-target="ep-07" data-cx="410" data-cy="205" data-title="Deploy the eUPF in the microVM" data-summary="Bringing episode 02's deployment back to run a real workload: the eUPF, inside a microVM.">
+        <circle class="node-dot" cx="410" cy="205" r="16"></circle>
+        <text class="node-num" x="410" y="209">07</text>
+        <text class="node-label" x="410" y="237">Deploy the eUPF</text>
+      </g>
+
+      <g class="node" data-target="ep-08" data-cx="190" data-cy="300" data-title="Testing the eUPF" data-summary="Testing the deployed eUPF.">
+        <circle class="node-dot" cx="190" cy="300" r="16"></circle>
+        <text class="node-num" x="190" y="304">08</text>
+        <text class="node-label" x="190" y="332">Test the eUPF</text>
+      </g>
+
+      <g class="node" data-target="ep-09" data-cx="430" data-cy="360" data-title="Deploy the monitoring agent" data-summary="A monitoring agent, deployed into the second microVM set up earlier, watching over the eUPF and the microVM it runs in.">
+        <circle class="node-dot" cx="430" cy="360" r="16"></circle>
+        <text class="node-num" x="430" y="364">09</text>
+        <text class="node-label" x="430" y="392">Deploy monitoring agent</text>
+      </g>
+
+      <g class="node" data-target="ep-10" data-cx="700" data-cy="330" data-title="Test everything end-to-end" data-summary="The full pipeline, tested start to finish.">
+        <circle class="node-dot" cx="700" cy="330" r="16"></circle>
+        <text class="node-num" x="700" y="334">10</text>
+        <text class="node-label" x="700" y="362">End-to-end test</text>
+      </g>
+
+    </svg>
+
+    <div class="node-tooltip" id="nodeTooltip">
+      <p class="tt-title" id="ttTitle"></p>
+      <p class="tt-summary" id="ttSummary"></p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p class="skip-note"><b>No need to go in order.</b> Feel free to skip whichever episodes cover something you already know. Each one is written to stand reasonably on its own.</p>
+  </div>
+
+  <div class="col">
+    <div class="timeline" id="timeline">
+
+      <div class="ep available" id="ep-01">
+        <div class="ep-head">
+          <span class="ep-num">01</span>
+          <p class="ep-title">What is a microVM?</p>
+          <span class="tag tag-status-available">Available</span>
+        </div>
+        <p class="ep-blurb">What a microVM actually is, how it differs from a conventional VM and from a container, and the mechanics underneath.</p>
+        <a class="ep-link" href="episode-01-what-is-a-microvm.html">Read episode →</a>
+      </div>
+
+      <div class="ep" id="ep-02">
+        <div class="ep-head">
+          <span class="ep-num">02</span>
+          <p class="ep-title">Deploy a microVM</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">Deploying a microVM by hand, step by step, and the network architecture behind it: bridges, TAP interfaces, and NAT.</p>
+      </div>
+
+      <div class="ep" id="ep-03">
+        <div class="ep-head">
+          <span class="ep-num">03</span>
+          <p class="ep-title">Deploy a microVM with an AI agent</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">Handing that same deployment over to an AI agent, end to end.</p>
+      </div>
+
+      <div class="ep" id="ep-04">
+        <div class="ep-head">
+          <span class="ep-num">04</span>
+          <p class="ep-title">What is a UPF, and how does an eUPF differ?</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">A telecom primer: what a UPF actually does, and how an eBPF-based eUPF takes a different approach.</p>
+      </div>
+
+      <div class="ep" id="ep-05">
+        <div class="ep-head">
+          <span class="ep-num">05</span>
+          <p class="ep-title">Basic eBPF knowledge</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">Just enough eBPF to understand what is coming next, no more, no less.</p>
+      </div>
+
+      <div class="ep" id="ep-06">
+        <div class="ep-head">
+          <span class="ep-num">06</span>
+          <p class="ep-title">How eUPF actually works</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">Inside the eUPF: its architecture, and how it puts eBPF to work.</p>
+      </div>
+
+      <div class="ep" id="ep-07">
+        <div class="ep-head">
+          <span class="ep-num">07</span>
+          <p class="ep-title">Deploy the eUPF in the microVM</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">Bringing episode 02's deployment back to run a real workload: the eUPF, inside a microVM.</p>
+      </div>
+
+      <div class="ep" id="ep-08">
+        <div class="ep-head">
+          <span class="ep-num">08</span>
+          <p class="ep-title">Testing the eUPF</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">Testing the deployed eUPF.</p>
+      </div>
+
+      <div class="ep" id="ep-09">
+        <div class="ep-head">
+          <span class="ep-num">09</span>
+          <p class="ep-title">Deploy the monitoring agent</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">A monitoring agent, deployed into the second microVM set up earlier, watching over the eUPF and the microVM it runs in.</p>
+      </div>
+
+      <div class="ep" id="ep-10">
+        <div class="ep-head">
+          <span class="ep-num">10</span>
+          <p class="ep-title">Test everything end-to-end</p>
+          <span class="tag tag-status-soon">Coming soon</span>
+        </div>
+        <p class="ep-blurb">The full pipeline, tested start to finish.</p>
+      </div>
+
+    </div>
+
+    <div class="footer-note">More episodes may be added as the series continues.</div>
+
+    <div class="about" id="aboutSection">
+      <div class="about-body">
+        <p class="about-kicker">About the author</p>
+        <p class="about-name">Dr. Afaf Arfaoui</p>
+        <p class="about-bio">Afaf Arfaoui is standardization researcher at DOCOMO, a Japanese mobile telecommunications company, which is a subsidiary of NTT, a prominent player in the global telecommunications industry. Prior to her role as a standardization researcher, Afaf earned her Ph.D. in telecommunications, where she concentrated on enhancing the allocation of network resources in both the RAN and Cloud networks. She also holds an engineering degree in ICT.
+When she isn't immersed in standardizing technologies or conducting research, she is hiking in the Alps or baking cakes in her kitchen.</p>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  // estimate reading time from the page's actual text content
+  (function(){
+    const wordsIn = (el) => (el.innerText.match(/\S+/g) || []).length;
+    const total = wordsIn(document.getElementById('introText'))
+                + wordsIn(document.getElementById('timeline'))
+                + wordsIn(document.getElementById('aboutSection'));
+    const minutes = Math.max(1, Math.round(total / 200));
+    document.getElementById('readTime').textContent = minutes + ' min read';
+  })();
+
+  // the map: connect the scattered nodes with a smooth winding trail,
+  //      let a glowing marker follow the cursor along it, highlight and
+  //      pop up a summary for whichever node the marker actually reaches,
+  //      and let clicking a node jump to its full write-up in the list below
+  (function(){
+    const svg = document.getElementById('mapSvg');
+    const mapWrap = document.getElementById('mapWrap');
+    const path = document.getElementById('trailPath');
+    const marker = document.getElementById('trailMarker');
+    const tooltip = document.getElementById('nodeTooltip');
+    const ttTitle = document.getElementById('ttTitle');
+    const ttSummary = document.getElementById('ttSummary');
+    const nodes = Array.from(document.querySelectorAll('.node'));
+    if (!nodes.length) return;
+
+    const waypoints = nodes.map(n => ({
+      x: parseFloat(n.dataset.cx),
+      y: parseFloat(n.dataset.cy)
+    }));
+
+    let d = `M ${waypoints[0].x} ${waypoints[0].y}`;
+    for (let i = 1; i < waypoints.length; i++){
+      const prev = waypoints[i-1], cur = waypoints[i];
+      const midX = (prev.x + cur.x) / 2;
+      d += ` C ${midX} ${prev.y}, ${midX} ${cur.y}, ${cur.x} ${cur.y}`;
+    }
+    path.setAttribute('d', d);
+
+    const total = path.getTotalLength();
+    const steps = Math.max(120, Math.round(total / 3));
+    const points = [];
+    for (let i = 0; i <= steps; i++){
+      points.push(path.getPointAtLength((i / steps) * total));
+    }
+
+    function nearestPoint(x, y){
+      let best = points[0], bestDist = Infinity;
+      for (const p of points){
+        const dx = p.x - x, dy = p.y - y;
+        const dist = dx*dx + dy*dy;
+        if (dist < bestDist){ bestDist = dist; best = p; }
+      }
+      return best;
+    }
+
+    const TOUCH_RADIUS = 24; // svg units: how close the marker must get to "reach" a node
+    let activeNode = null;
+
+    function svgPointToWrapPixels(x, y){
+      const pt = svg.createSVGPoint();
+      pt.x = x; pt.y = y;
+      const screenPt = pt.matrixTransform(svg.getScreenCTM());
+      const wrapRect = mapWrap.getBoundingClientRect();
+      return { x: screenPt.x - wrapRect.left, y: screenPt.y - wrapRect.top };
+    }
+
+    function setActiveNode(node){
+      if (node === activeNode) return;
+      if (activeNode) activeNode.classList.remove('active');
+      activeNode = node;
+      if (!activeNode){
+        tooltip.classList.remove('show');
+        return;
+      }
+      activeNode.classList.add('active');
+      const cx = parseFloat(activeNode.dataset.cx);
+      const cy = parseFloat(activeNode.dataset.cy);
+      const px = svgPointToWrapPixels(cx, cy);
+      const wrapWidth = mapWrap.getBoundingClientRect().width;
+      let left = px.x;
+      left = Math.max(120, Math.min(wrapWidth - 120, left));
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = px.y + 'px';
+      ttTitle.textContent = activeNode.dataset.title;
+      ttSummary.textContent = activeNode.dataset.summary;
+      tooltip.classList.add('show');
+    }
+
+    svg.addEventListener('mousemove', (e) => {
+      const rect = svg.getBoundingClientRect();
+      const vb = svg.viewBox.baseVal;
+      const x = ((e.clientX - rect.left) / rect.width) * vb.width;
+      const y = ((e.clientY - rect.top) / rect.height) * vb.height;
+      const p = nearestPoint(x, y);
+      marker.setAttribute('cx', p.x);
+      marker.setAttribute('cy', p.y);
+      marker.classList.add('show');
+
+      let touched = null, bestDist = TOUCH_RADIUS * TOUCH_RADIUS;
+      for (const n of nodes){
+        const nx = parseFloat(n.dataset.cx), ny = parseFloat(n.dataset.cy);
+        const dx = p.x - nx, dy = p.y - ny;
+        const dist = dx*dx + dy*dy;
+        if (dist < bestDist){ bestDist = dist; touched = n; }
+      }
+      setActiveNode(touched);
+    });
+
+    svg.addEventListener('mouseleave', () => {
+      marker.classList.remove('show');
+      setActiveNode(null);
+    });
+
+    nodes.forEach(n => {
+      n.addEventListener('click', () => {
+        const target = document.getElementById(n.dataset.target);
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.classList.add('flash');
+        setTimeout(() => target.classList.remove('flash'), 900);
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
