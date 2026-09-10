@@ -1,8 +1,29 @@
 <!DOCTYPE html>
+<!--
+  CHANGELOG (author notes, not rendered)
+  Revision: September 2026
+
+  Applied the same site-wide fixes made to episode-01-what-is-a-microvm.html:
+  - Added dark mode: theme variables, a toggle button (top-right, since this
+    page has no topbar), and localStorage persistence under the same key
+    ("microvm-theme") so the preference carries across both pages.
+  - Fixed hardcoded light colors that would have stayed flashy-white in dark
+    mode: node-dot fill, node-tooltip background, and the active-node fill.
+  - Matched inline <code> styling to episode 01's fixed dark-terminal look
+    (not yet used anywhere on this page, but kept consistent for later use).
+  - Removed contractions ("What's" -> "What is" in two node labels, "isn't"
+    -> "is not" in the bio) and confirmed no em dashes were present.
+  - Added meta description / Open Graph tags.
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>MicroVMs, eBPF, and AI Agents in Telecom Infrastructure</title>
+<meta name="description" content="A series watching microVMs, eBPF, and AI agents actually work together in telecom infrastructure, through real working examples rather than abstract descriptions.">
+<meta property="og:title" content="MicroVMs, eBPF, and AI Agents in Telecom Infrastructure">
+<meta property="og:description" content="A series watching microVMs, eBPF, and AI agents actually work together in telecom infrastructure, through real working examples.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -16,9 +37,18 @@
     --red-soft:rgba(185,14,10,0.06);
     --red-soft-2:rgba(185,14,10,0.14);
   }
+  html[data-theme="dark"]{
+    --paper:#16181C;
+    --ink:#EDEBE8;
+    --muted:#9C968F;
+    --rule:#33363B;
+    --red:#FF6B63;
+    --red-soft:rgba(255,107,99,0.10);
+    --red-soft-2:rgba(255,107,99,0.22);
+  }
   *{ box-sizing:border-box; }
   html,body{ margin:0; background:var(--paper); }
-  body{ font-family:'Inter', sans-serif; color:var(--ink); min-height:100vh; }
+  body{ font-family:'Inter', sans-serif; color:var(--ink); min-height:100vh; transition:background .2s ease, color .2s ease; }
 
   .page{ max-width:1040px; margin:0 auto; padding:56px 32px 100px; }
   .col{ max-width:none; }
@@ -38,8 +68,8 @@
   .intro p{ font-size:15.5px; line-height:1.75; color:var(--muted); margin:0 0 16px; }
   .intro{ margin-bottom:24px; }
   .intro code{
-    font-family:'IBM Plex Mono', monospace; background:var(--red-soft); color:var(--red);
-    padding:1px 5px; border-radius:3px; font-size:0.9em;
+    font-family:'IBM Plex Mono', monospace; background:#1F2328; color:#F5D7D5;
+    padding:2px 6px; border-radius:4px; font-size:0.88em;
   }
 
   .skip-note{
@@ -66,7 +96,7 @@
 
   .node{ cursor:pointer; }
   .node-dot{
-    fill:#fff; stroke:var(--rule); stroke-width:1.6;
+    fill:var(--paper); stroke:var(--rule); stroke-width:1.6;
     transition:stroke .2s ease, fill .2s ease, r .2s ease;
   }
   .node-num{
@@ -80,7 +110,7 @@
     transition:fill .2s ease;
   }
 
-  .node.active .node-dot{ r:20; stroke:var(--red); fill:#FDEEEC; }
+  .node.active .node-dot{ r:20; stroke:var(--red); fill:var(--red-soft-2); }
   .node.active .node-num{ fill:var(--red); }
   .node.active .node-label{ fill:var(--ink); font-weight:600; }
 
@@ -88,7 +118,7 @@
     position:absolute;
     left:0; top:0;
     transform:translate(-50%, calc(-100% - 14px));
-    background:#fff;
+    background:var(--paper);
     border:1px solid var(--rule);
     border-radius:6px;
     padding:10px 14px;
@@ -160,9 +190,19 @@
   @media (max-width:720px){
     .page{ padding:40px 20px 80px; }
   }
+
+  .theme-toggle{
+    position:fixed; top:20px; right:24px; z-index:30;
+    font-size:12px; color:var(--red); background:var(--paper);
+    border:1px solid var(--red-soft-2); border-radius:5px;
+    padding:6px 12px; cursor:pointer;
+  }
+  .theme-toggle:hover{ background:var(--red-soft); }
 </style>
 </head>
 <body>
+
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9789;</button>
 
 <div class="page">
 
@@ -185,7 +225,7 @@
       <g class="node" data-target="ep-01" data-cx="90" data-cy="70" data-title="What is a microVM?" data-summary="What a microVM actually is, and how it differs from a conventional VM and from a container.">
         <circle class="node-dot" cx="90" cy="70" r="16"></circle>
         <text class="node-num" x="90" y="74">01</text>
-        <text class="node-label" x="90" y="102">What's a microVM?</text>
+        <text class="node-label" x="90" y="102">What is a microVM?</text>
       </g>
 
       <g class="node" data-target="ep-02" data-cx="300" data-cy="45" data-title="Deploy a microVM" data-summary="Deploying a microVM by hand, step by step, and the network architecture behind it: bridges, TAP interfaces, and NAT.">
@@ -203,7 +243,7 @@
       <g class="node" data-target="ep-04" data-cx="700" data-cy="55" data-title="What is a UPF, and how does an eUPF differ?" data-summary="What a UPF actually does, and how an eBPF-based eUPF takes a different approach.">
         <circle class="node-dot" cx="700" cy="55" r="16"></circle>
         <text class="node-num" x="700" y="59">04</text>
-        <text class="node-label" x="700" y="87">What's a UPF?</text>
+        <text class="node-label" x="700" y="87">What is a UPF?</text>
       </g>
 
       <g class="node" data-target="ep-05" data-cx="850" data-cy="190" data-title="Basic eBPF knowledge" data-summary="Just enough eBPF to understand what is coming next, no more, no less.">
@@ -357,13 +397,34 @@
         <p class="about-kicker">About the author</p>
         <p class="about-name">Dr. Afaf Arfaoui</p>
         <p class="about-bio">Afaf Arfaoui is standardization researcher at DOCOMO, a Japanese mobile telecommunications company, which is a subsidiary of NTT, a prominent player in the global telecommunications industry. Prior to her role as a standardization researcher, Afaf earned her Ph.D. in telecommunications, where she concentrated on enhancing the allocation of network resources in both the RAN and Cloud networks. She also holds an engineering degree in ICT.
-When she isn't immersed in standardizing technologies or conducting research, she is hiking in the Alps or baking cakes in her kitchen.</p>
+When she is not immersed in standardizing technologies or conducting research, she is hiking in the Alps or baking cakes in her kitchen.</p>
       </div>
     </div>
 
   </div>
 
 </div>
+
+<script>
+  (function(){
+    var themeBtn = document.getElementById('themeToggle');
+    var stored = null;
+    try { stored = localStorage.getItem('microvm-theme'); } catch(e) {}
+    if (stored === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', function(){
+        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDark) {
+          document.documentElement.removeAttribute('data-theme');
+          try { localStorage.setItem('microvm-theme', 'light'); } catch(e) {}
+        } else {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          try { localStorage.setItem('microvm-theme', 'dark'); } catch(e) {}
+        }
+      });
+    }
+  })();
+</script>
 
 <script>
   // estimate reading time from the page's actual text content
