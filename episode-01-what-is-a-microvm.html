@@ -1,0 +1,2989 @@
+<!DOCTYPE html>
+<!--
+  CHANGELOG (author notes, not rendered)
+  Revision: September 2026
+
+  Technical accuracy fixes:
+  - Corrected VM-exit handling: attributed decode/emulation steps to KVM vs.
+    the userspace VMM correctly (previously implied a single undifferentiated
+    "hypervisor" does everything, and that all exit causes are "emulated,"
+    which is false for causes like timer interrupts).
+  - Corrected EPT/NPT description: EPT performs only the guest-physical to
+    host-physical stage; the guest's own page tables perform guest-virtual to
+    guest-physical, as on bare metal.
+  - Corrected ioeventfd claim: it avoids a synchronous userspace round-trip,
+    not the VM exit itself, which still occurs.
+  - Corrected container-isolation contrast: containers do get normal
+    hardware-enforced per-process memory protection; what they lack is a
+    second, independent hardware layer (EPT) beneath the shared kernel.
+  - Corrected "virtio-only" overclaim (Firecracker also has a small number of
+    legacy devices: console UART, i8042 reset).
+  - Fixed backwards causality in the VM-exit/PC-emulation paragraph.
+  - Fixed timeline compression around Clear Containers/runV vs. Firecracker
+    (they predate Firecracker by years; merged into Kata in Dec 2017, about a
+    year before Firecracker was open-sourced in Nov 2018).
+  - Fixed a citation bug: three reference list entries shared id="ref-22",
+    breaking navigation for [23]; also removed an unused duplicate reference.
+  - Added a previously-unused reference ([5], capabilities/seccomp) at its
+    natural point in the text.
+
+  Structural / UX fixes:
+  - Normalized paragraph spacing (removed inconsistent inline overrides).
+  - Sped up initial animation reveal on all 5 diagrams (was ~3-3.5s idle
+    before anything appeared; now ~0.4s), same behavior on replay.
+  - Replaced assembly mnemonics in the guest-mode animation with plain-English
+    labels (read/calc/check/branch/I-O).
+  - Consistent figure numbering (1-5) with titles, and each figure now cited
+    at least once in the body text. Disambiguated an in-text reference to
+    Figure 5 of the cited Firecracker paper from this document's own Figure 5.
+  - Fixed sidebar section indicator not updating once the reader reached
+    References (References is now a tracked, numbered section).
+  - Fixed citation-click scroll landing under the sticky header
+    (added scroll-padding-top).
+  - Removed all em dashes and contractions; general pass toward a more
+    formal register, including animation captions.
+  - Added meta description / Open Graph tags, a references "last verified"
+    date, and this changelog.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Episode 01: What is a microVM?</title>
+<meta name="description" content="A technical introduction to microVMs: how they differ from traditional VMs and containers, why they were created, and how Firecracker, Cloud Hypervisor, Kata Containers and others implement them.">
+<meta property="og:title" content="Episode 01: What is a microVM?">
+<meta property="og:description" content="How microVMs differ from traditional VMs and containers, why they were created, and how projects like Firecracker and Cloud Hypervisor implement them.">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAFAF8;
+    --ink:#1F2328;
+    --muted:#6B6560;
+    --rule:#E4E1DC;
+    --red:#B90E0A;
+    --red-soft:rgba(185,14,10,0.06);
+    --red-soft-2:rgba(185,14,10,0.14);
+    --header-bg:rgba(250,250,248,0.94);
+  }
+  html[data-theme="dark"]{
+    --paper:#16181C;
+    --ink:#EDEBE8;
+    --muted:#9C968F;
+    --rule:#33363B;
+    --red:#FF6B63;
+    --red-soft:rgba(255,107,99,0.10);
+    --red-soft-2:rgba(255,107,99,0.22);
+    --header-bg:rgba(22,24,28,0.94);
+  }
+  /* Diagram widgets each declare their own local --white/--paper/--rule/--ink/--red,
+     so they don't inherit the page-level dark theme above; override them here. */
+  html[data-theme="dark"] .vmd4-widget,
+  html[data-theme="dark"] .gm-widget,
+  html[data-theme="dark"] .ep-widget,
+  html[data-theme="dark"] .ct-widget,
+  html[data-theme="dark"] .faas-widget,
+  html[data-theme="dark"] .vt-widget{
+    --white:#2A2D33;
+    --paper:#1C1F24;
+    --rule:#3A3D42;
+    --ink:#EDEBE8;
+    --red:#FF6B63;
+  }
+  html[data-theme="dark"] .ep-widget{
+    --green:#4CAF6D;
+  }
+  body{ transition:background .2s ease, color .2s ease; }
+  *{box-sizing:border-box;}
+  html{ scroll-behavior:smooth; scroll-padding-top:80px; }
+  html,body{margin:0;background:var(--paper);}
+  body{ font-family:'Inter', sans-serif; color:var(--ink); min-height:100vh; }
+  .page{ max-width:880px; margin:0 auto; padding:0 24px 80px; }
+
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:var(--header-bg);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--rule);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 24px; max-width:880px; margin:0 auto;
+  }
+  #readProgress{
+    position:fixed; top:0; left:0; height:3px; width:0%;
+    background:var(--red); z-index:30; transition:width .1s linear;
+  }
+  .series-name{ font-size:12px; letter-spacing:.04em; color:var(--muted); text-transform:uppercase; }
+  .series-name b{ color:var(--ink); font-weight:600; }
+  .roadmap-btn{
+    font-size:12px; color:var(--red); background:var(--paper);
+    border:1px solid var(--red-soft-2); border-radius:5px; padding:6px 12px; cursor:pointer;
+  }
+  .roadmap-btn:hover{ background:var(--red-soft); }
+
+  .roadmap-strip{ position:sticky; top:55px; z-index:19; max-width:880px; margin:0 auto; overflow:hidden; max-height:0; transition:max-height .25s ease; background:var(--paper); border-bottom:1px solid var(--rule); }
+  .roadmap-strip.open{ max-height:110px; }
+  .roadmap-inner{ display:flex; justify-content:center; gap:0; padding:20px 24px; overflow-x:auto; }
+  .rm-node{ display:flex; flex-direction:column; align-items:center; min-width:74px; position:relative; }
+  .rm-node:not(:last-child)::after{
+    content:'';
+    position:absolute;
+    top:14px;
+    left:calc(50% + 14px);
+    width:calc(100% - 14px);
+    height:0;
+    border-top:1.5px dashed var(--rule);
+    z-index:0;
+  }
+  .rm-dot{ width:28px; height:28px; border-radius:50%; background:var(--paper); border:1.5px solid var(--rule); display:flex; align-items:center; justify-content:center; font-size:10px; z-index:1; position:relative; color:var(--muted); transition:transform .2s ease, background .15s, border-color .15s, color .15s; }
+  .rm-node:hover .rm-dot{ transform:scale(1.35); }
+  .rm-node.current .rm-dot{ border-color:var(--red); color:var(--red); background:var(--red-soft-2); }
+  .rm-lbl{ font-size:9px; color:var(--muted); margin-top:6px; text-align:center; max-width:70px; }
+
+  .ep-header{ padding:40px 0 20px; }
+  .eyebrow{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--red); margin-bottom:10px; font-weight:600; }
+  h1{ font-size:30px; font-weight:600; margin:0 0 12px; line-height:1.2; }
+  .dek{ font-size:15.5px; color:var(--muted); line-height:1.65; margin:0; max-width:560px; }
+
+  /* ---- diagram slot (uploaded widget goes here, unmodified) ---- */
+  .diagram-wrap{ margin:28px 0 8px; }
+
+  .body-copy{ margin-top:32px; font-size:15.5px; line-height:1.75; max-width:100%; }
+  .body-copy p{ margin:0 0 16px; }
+
+  .module-toggle{ display:flex; align-items:center; gap:10px; margin:28px 0 0; }
+  .module-toggle label{ font-size:12px; color:var(--muted); }
+  .switch{ position:relative; width:36px; height:20px; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .switch .track{ position:absolute; inset:0; background:var(--rule); border-radius:10px; cursor:pointer; transition:.2s; }
+  .switch .thumb{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.2); transition:.2s; }
+  .switch input:checked + .track{ background:var(--red-soft-2); }
+  .switch input:checked + .track .thumb{ transform:translateX(16px); background:var(--red); }
+
+  .code-module{ max-height:0; overflow:hidden; transition:max-height .25s ease; }
+  .code-module.open{ max-height:220px; margin-top:14px; }
+  .codebox{ background:var(--paper); border:1px solid var(--rule); border-radius:5px; overflow:hidden; }
+  .code-head{ display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--rule); font-size:11px; color:var(--muted); }
+  .copy-btn{ font-size:10px; color:var(--muted); background:var(--paper); border:1px solid var(--rule); border-radius:3px; padding:3px 8px; cursor:pointer; }
+  .copy-btn:hover{ color:var(--red); border-color:var(--red); }
+  .codebox pre{ margin:0; padding:14px 16px; font-family:'IBM Plex Mono', monospace; font-size:12px; line-height:1.7; color:var(--ink); }
+  .codebox .comment{ color:var(--muted); }
+  .codebox .flag{ color:var(--red); }
+
+  .dig-deeper{
+    margin-top:28px;
+    border-left:3px solid var(--red);
+    background:var(--red-soft);
+    border-radius:0 6px 6px 0;
+    padding:14px 18px;
+  }
+  .dig-toggle{ display:flex; align-items:center; gap:9px; cursor:pointer; font-size:13px; color:var(--red); background:none; border:none; padding:0; font-weight:600; letter-spacing:.01em; width:100%; text-align:left; }
+  .dig-toggle .dig-icon{ display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; border:1.5px solid var(--red); font-size:10px; font-weight:700; flex-shrink:0; text-transform:none; }
+  .dig-toggle .chev{ transition:transform .2s; margin-left:auto; }
+  .dig-toggle.open .chev{ transform:rotate(90deg); }
+  .dig-content{ max-height:0; overflow:hidden; transition:max-height .3s ease; font-size:13px; line-height:1.7; color:var(--muted); max-width:100%; }
+  .dig-content > *:first-child{ margin-top:14px; }
+  .dig-content.open{ max-height:2400px; margin-top:12px; }
+
+  .reflect{ margin-top:36px; padding:20px 22px; background:var(--red-soft); border:1px solid var(--red-soft-2); border-radius:6px; }
+  .reflect .q{ font-size:15px; font-weight:600; margin:0 0 12px; }
+  .reveal-btn{ font-size:12px; color:var(--red); background:var(--paper); border:1px solid var(--red); border-radius:5px; padding:6px 12px; cursor:pointer; }
+  .reveal-btn:hover{ background:var(--red-soft-2); }
+  .reflect-answer{ max-height:0; overflow:hidden; transition:max-height .25s ease; font-size:14px; color:var(--ink); line-height:1.65; }
+  .reflect-answer.open{ max-height:160px; margin-top:12px; }
+
+  .footer-nav{ display:flex; justify-content:space-between; margin-top:48px; padding-top:20px; border-top:1px solid var(--rule); }
+  .footer-nav a{ font-size:12.5px; color:var(--muted); text-decoration:none; }
+  .footer-nav a:hover{ color:var(--red); }
+
+  /* ---- numbered section titles ---- */
+  .section-num{
+    font-size:20px; font-weight:600; letter-spacing:.01em; color:var(--red);
+    margin:0 0 14px; text-transform:none;
+  }
+  section.tracked{ padding-top:36px; }
+  section.tracked:first-of-type{ padding-top:0; }
+
+  .sub-heading{
+  font-size:15.5px; font-weight:600; color:var(--ink);
+  letter-spacing:.02em; text-transform:uppercase;
+  margin:36px 0 14px;
+  padding-bottom:6px;
+  border-bottom:1px solid var(--rule);
+  }
+  .sub-heading:first-of-type{ margin-top:20px; }
+
+  /* ---- left-side scroll indicator ---- */
+  .side-nav{
+    position:fixed;
+    left:28px;
+    top:50%;
+    transform:translateY(-50%);
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    z-index:15;
+  }
+  .side-nav .sn-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    cursor:pointer;
+    text-decoration:none;
+  }
+  .side-nav .sn-dot{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--rule);
+    border:1.5px solid var(--rule);
+    flex-shrink:0;
+    transition:background .2s, border-color .2s, transform .2s;
+  }
+  .side-nav .sn-label{
+    font-size:11px; color:var(--muted);
+    white-space:nowrap;
+    opacity:0;
+    transform:translateX(-4px);
+    transition:opacity .2s, transform .2s;
+  }
+  .side-nav .sn-item:hover .sn-label{ opacity:1; transform:translateX(0); }
+  .side-nav .sn-item.active .sn-dot{
+    background:var(--red); border-color:var(--red); transform:scale(1.25);
+  }
+  .side-nav .sn-item.active .sn-label{ color:var(--ink); font-weight:500; opacity:1; transform:translateX(0); }
+
+  @media (max-width:1140px){
+    .side-nav{ display:none; }
+  }
+
+  /* ---- inline code style, e.g. <code>ioctl()</code> ---- */
+  code{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.88em;
+    background:#1F2328;
+    color:#F5D7D5;
+    padding:2px 7px;
+    border-radius:4px;
+    white-space:nowrap;
+    letter-spacing:.01em;
+  }
+
+  /* ---- inline reference citation, e.g. <a class="ref-link" href="#ref-11">[11]</a> ---- */
+  .ref-link{
+    color:var(--red);
+    text-decoration:none;
+    font-size:0.82em;
+    font-weight:600;
+    vertical-align:super;
+    margin-left:1px;
+  }
+  .ref-link:hover{ text-decoration:underline; }
+
+  .pull-quote{
+    font-size:19px; line-height:1.5; font-weight:500; color:var(--ink);
+    border-left:3px solid var(--red); padding:2px 0 2px 20px;
+    margin:28px 0; max-width:520px;
+  }
+</style>
+</head>
+<body>
+
+<div id="readProgress"></div>
+<div class="topbar">
+  <span class="series-name"><b>MicroVMs, eBPF, and AI Agents in Telecom Infrastructure</b> · Episode 01</span>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <button class="roadmap-btn" id="roadmapBtn">View roadmap</button>
+    <button class="roadmap-btn" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9789;</button>
+  </div>
+</div>
+
+<div class="roadmap-strip" id="roadmapStrip">
+  <div class="roadmap-inner">
+    <a class="rm-node" href="index.html" style="text-decoration:none; color:inherit;"><div class="rm-dot">00</div><div class="rm-lbl">Home</div></a>
+    <div class="rm-node current"><div class="rm-dot">01</div><div class="rm-lbl">What is a microVM</div></div>
+    <div class="rm-node"><div class="rm-dot">02</div><div class="rm-lbl">Deploy a microVM</div></div>
+    <div class="rm-node"><div class="rm-dot">03</div><div class="rm-lbl">Automate w/ agent</div></div>
+    <div class="rm-node"><div class="rm-dot">04–7</div><div class="rm-lbl">UPF / eBPF</div></div>
+    <div class="rm-node"><div class="rm-dot">08</div><div class="rm-lbl">Deploy eUPF</div></div>
+    <div class="rm-node"><div class="rm-dot">09</div><div class="rm-lbl">Monitor</div></div>
+  </div>
+</div>
+
+<nav class="side-nav" id="sideNav">
+  <a class="sn-item" data-target="sec-intro" href="#sec-intro"><span class="sn-dot"></span><span class="sn-label">1. Introduction</span></a>
+  <a class="sn-item" data-target="sec-background" href="#sec-background"><span class="sn-dot"></span><span class="sn-label">2. Background</span></a>
+  <a class="sn-item" data-target="sec-deepdive" href="#sec-deepdive"><span class="sn-dot"></span><span class="sn-label">3. Why microVMs appeared?</span></a>
+  <a class="sn-item" data-target="sec-reflect" href="#sec-reflect"><span class="sn-dot"></span><span class="sn-label">4. What is a MicroVM and how it works</span></a>
+  <a class="sn-item" data-target="sec-vs" href="#sec-vs"><span class="sn-dot"></span><span class="sn-label">5. MicroVM vs. VM vs. Container</span></a>
+  <a class="sn-item" data-target="sec-benefits" href="#sec-benefits"><span class="sn-dot"></span><span class="sn-label">6. Benefits and disadvantages</span></a>
+  <a class="sn-item" data-target="sec-solutions" href="#sec-solutions"><span class="sn-dot"></span><span class="sn-label">7. Existing MicroVM Solutions</span></a>
+  <a class="sn-item" data-target="references" href="#references"><span class="sn-dot"></span><span class="sn-label">References</span></a>
+</nav>
+
+<div class="page">
+
+  <div class="ep-header">
+    <div class="eyebrow">Episode 01</div>
+    <h1>MicroVMs in theory</h1>
+  </div>
+
+  <section class="tracked" id="sec-intro">
+    <div class="section-num">1. Introduction</div>
+    <div class="body-copy" style="margin-top:0;">
+      <p>The best way to grasp the concept of microVMs is to familiarize 
+        ourselves with the two technologies it sits between, which are conventional Virtual Machines (VMs) and containers. This is because microVM 
+        is not completely invented from scratch, rather, it is a VM that uses the same hardware virtualization 
+        foundations as a conventional VM, but with nearly all non-essential features removed. The outcome is a virtualization technology that, from 
+        a security standpoint, operates like a full VM, yet exhibits speed and density close to that of containers.</p>
+      <p>
+        In this episode we will walk through the background of how VMs and containers function under the hood (starting with
+        the layered view in Figure 1 below), the reason behind the creation of microVMs, and how a microVM virtualizes CPU, memory
+        and I/O, which, as we will see, differs far less from a conventional VM than one might expect. We can then compare the three
+        virtualization methods and list the benefits and drawbacks of microVMs specifically. At the end of the episode we will be
+        discovering existing microVM solutions.
+      </p>
+    </div>
+  </section>
+
+  <section class="tracked" id="sec-background">
+  <div class="section-num">2. Background</div>
+
+    <div class="sub-heading">How does a traditional VM actually work?</div>
+    <div class="body-copy" style="margin-top:0;">
+      <p>A conventional VM, the kind hosted by a hypervisor platform such as VMware ESXi, Xen, QEMU+KVM, or Hyper-V, 
+        relies on <b>hardware-assisted virtualization</b>. What does it mean? It means using CPU extensions such as VT-x (Intel) 
+        and AMD-V that let a CPU run virtual machines more efficiently. These extensions enable the CPU core to switch, for most guest execution, 
+        into a distinct hardware execution mode for running guest code: Intel terms this VMX non-root operation, and AMD terms it guest mode. 
+        This document uses "guest mode" to refer to either. Within guest mode, the guest operating system retains its normal ring 0/ring 3 division 
+        (kernel versus user), exactly as it would on physical hardware. Nothing about the guest's own privilege structure is altered. What changes 
+        is the introduction of a hardware boundary around the entire guest, host and kernel alike. Certain operations, regardless of the ring from 
+        which they originate, are flagged by the CPU as requiring the host's attention. These operations are described under VM exits below and illustrated 
+        in Figure 2.
+      </p>
+
+      <div class="pull-quote">Nothing about the guest's own privilege structure changes. What is new is a hardware boundary drawn around the entire guest, kernel included.</div>
+
+      <p>Beyond running guest instructions natively, two further hardware features are what make this 
+        model both safe and practical:</p>
+
+      <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
+        <li style="margin-bottom:12px;"><strong>Extended/Nested Page Tables (EPT/NPT):</strong> Normally, CPU's memory management unit translates 
+          virtual addresses to physical addresses using <b>page tables</b>. In a VM, there is an extra layer: guest virtual address → guest physical 
+          address→ host physical address. EPT/NPT lets the CPU perform that second translation in hardware. This is the actual security boundary 
+          between VMs: the CPU itself checks and translates the guest's memory accesses (see Figure 3 below), ensuring the guest cannot access memory 
+          outside the region the hypervisor mapped for it, no matter what are its software actions. This hardware-enforced boundary is the most important 
+          fact for later understanding why VMs (and microVMs) are considered more isolated than containers.</li>
+        <li><strong>VM exits/entries:</strong> Whenever the guest attempts something that the CPU is not able to carry out on its own, such as a 
+          privileged instruction, an I/O port access, or a timer interrupt meant for the host, the CPU exits guest mode into KVM (what is called a 
+          "VM exit"). KVM's role here is to set up and execute the actual hardware transition, and to decode why the exit happened. For most 
+          device-related exits, KVM does not emulate anything itself, it packages up the exit reason and hands control to the userspace VMM 
+          (e.g., QEMU), which is the piece that actually performs the emulation. KVM does resolve a small number of performance-critical cases entirely 
+          on its own, without ever involving the VMM, but that is not the general rule. What happens next depends on the cause of the exit. For an I/O 
+          port access, the VMM typically computes the value a real device would have produced and returns it. For a timer interrupt meant for the host, 
+          there is nothing to emulate at all. The host simply uses the moment to run its own scheduler, for example checking whether this vCPU's 
+          timeslice has expired. In either case, the guest resumes with a VM entry (see Figure 2 below) and never becomes aware it was paused. Every VM exit still costs time, 
+          since leaving and re-entering guest mode is not free, which is a large part of why VMM and microVM design focuses on minimizing how often it 
+          happens.</b>.</li>
+      </ul>
+    </div>
+      
+      <!-- ===================================================================
+     VIRTUALIZATION DIAGRAMS CAROUSEL, pasted in as-is
+===================================================================== -->
+<div class="diagram-wrap">
+
+<div class="crsl-wrap" id="crslWrap">
+
+  <div class="crsl-header">
+    <span class="crsl-counter" id="crslCounter">1 / 3</span>
+    <span class="crsl-title" id="crslTitle"></span>
+  </div>
+
+  <div class="crsl-viewport">
+    <button class="crsl-nav crsl-prev" id="crslPrev" aria-label="Previous diagram">‹</button>
+
+    <div class="crsl-slides" id="crslSlides">
+
+      <!-- ============================= SLIDE 1: VM / KVM architecture ============================= -->
+      <div class="crsl-slide" data-title="VM / KVM architecture" data-replay-id="vmd4Replay">
+
+        <div class="vmd4-widget" id="vmd4Widget">
+
+          <div class="vmd4-canvas">
+            <svg viewBox="0 0 1000 600" id="vmd4Svg" role="img" aria-label="Diagram of two guest VMs, each managed by a QEMU VMM process, calling into the host kernel's KVM module, which runs guest code on hardware with VT-x/AMD-V and EPT">
+
+              <!-- step 0: Hardware -->
+              <g id="vmd4-hardware" class="vmd4-reveal">
+                <rect x="40" y="520" width="920" height="60" rx="8" class="vmd4-fill-ink"/>
+                <text x="500" y="555" text-anchor="middle" class="vmd4-label vmd4-invert">Hardware (CPU with VT-x / AMD-V + EPT)</text>
+              </g>
+
+              <!-- step 1: Host kernel shell + KVM module (together) -->
+              <g id="vmd4-hostkernel" class="vmd4-reveal">
+                <rect x="40" y="340" width="920" height="140" rx="10" class="vmd4-fill-white"/>
+                <text x="500" y="364" text-anchor="middle" class="vmd4-label vmd4-label-strong">Host kernel</text>
+              </g>
+              <g id="vmd4-kvm" class="vmd4-reveal">
+                <rect x="280" y="382" width="440" height="72" rx="8" class="vmd4-fill-paper"/>
+                <text x="500" y="410" text-anchor="middle" class="vmd4-label vmd4-label-strong">KVM (Linux kernel module)</text>
+                <text x="500" y="430" text-anchor="middle" class="vmd4-label">Exposes the /dev/kvm ioctl interface</text>
+              </g>
+
+              <!-- step 2: host kernel -> hardware arrow -->
+              <g id="vmd4-hwArrow" class="vmd4-reveal">
+                <line x1="500" y1="454" x2="500" y2="518" class="vmd4-line-red" marker-end="url(#vmd4-arrow-red)"/>
+                <text x="520" y="500" class="vmd4-label">Guest-mode execution</text>
+              </g>
+
+              <!-- step 3: VM outer shells -->
+              <g id="vmd4-vmOuter" class="vmd4-reveal">
+                <rect x="40" y="20" width="330" height="250" rx="10" class="vmd4-fill-paper"/>
+                <text x="205" y="46" text-anchor="middle" class="vmd4-label vmd4-label-strong">VMM process (e.g., QEMU)</text>
+
+                <rect x="630" y="20" width="330" height="250" rx="10" class="vmd4-fill-paper"/>
+                <text x="795" y="46" text-anchor="middle" class="vmd4-label vmd4-label-strong">VMM process (e.g., QEMU)</text>
+              </g>
+
+              <!-- step 4: VM internals (both sides) -->
+              <g id="vmd4-vmInner" class="vmd4-reveal">
+                <!-- left -->
+                <text x="60" y="88" class="vmd4-label vmd4-label-red vmd4-label-strong">Guest VM</text>
+                <rect x="52" y="96" width="306" height="158" rx="6" class="vmd4-dashed-red"/>
+                <rect x="64" y="112" width="136" height="34" rx="4" class="vmd4-fill-rule"/><text x="132" y="134" text-anchor="middle" class="vmd4-label">App 1</text>
+                <rect x="210" y="112" width="136" height="34" rx="4" class="vmd4-fill-rule"/><text x="278" y="134" text-anchor="middle" class="vmd4-label">App 2</text>
+                <rect x="64" y="152" width="136" height="46" rx="4" class="vmd4-fill-paper"/><text x="132" y="171" text-anchor="middle" class="vmd4-label">Bins/</text><text x="132" y="187" text-anchor="middle" class="vmd4-label">Libs</text>
+                <rect x="210" y="152" width="136" height="46" rx="4" class="vmd4-fill-paper"/><text x="278" y="171" text-anchor="middle" class="vmd4-label">Bins/</text><text x="278" y="187" text-anchor="middle" class="vmd4-label">Libs</text>
+                <rect x="64" y="204" width="282" height="42" rx="4" class="vmd4-fill-white"/><text x="205" y="229" text-anchor="middle" class="vmd4-label vmd4-label-strong">Guest OS Kernel</text>
+
+                <!-- right -->
+                <text x="650" y="88" class="vmd4-label vmd4-label-red vmd4-label-strong">Guest VM</text>
+                <rect x="642" y="96" width="306" height="158" rx="6" class="vmd4-dashed-red"/>
+                <rect x="654" y="112" width="136" height="34" rx="4" class="vmd4-fill-rule"/><text x="722" y="134" text-anchor="middle" class="vmd4-label">App 1</text>
+                <rect x="800" y="112" width="136" height="34" rx="4" class="vmd4-fill-rule"/><text x="868" y="134" text-anchor="middle" class="vmd4-label">App 2</text>
+                <rect x="654" y="152" width="136" height="46" rx="4" class="vmd4-fill-paper"/><text x="722" y="171" text-anchor="middle" class="vmd4-label">Bins/</text><text x="722" y="187" text-anchor="middle" class="vmd4-label">Libs</text>
+                <rect x="800" y="152" width="136" height="46" rx="4" class="vmd4-fill-paper"/><text x="868" y="171" text-anchor="middle" class="vmd4-label">Bins/</text><text x="868" y="187" text-anchor="middle" class="vmd4-label">Libs</text>
+                <rect x="654" y="204" width="282" height="42" rx="4" class="vmd4-fill-white"/><text x="795" y="229" text-anchor="middle" class="vmd4-label vmd4-label-strong">Guest OS Kernel</text>
+              </g>
+
+              <!-- step 5: ioctl arrows (vertical, stop at box edges) -->
+              <g id="vmd4-ioctl" class="vmd4-reveal">
+                <line x1="205" y1="270" x2="205" y2="339" class="vmd4-line-red" marker-end="url(#vmd4-arrow-red)"/>
+                <text x="185" y="308" text-anchor="end" class="vmd4-label">ioctl calls</text>
+
+                <line x1="795" y1="270" x2="795" y2="339" class="vmd4-line-red" marker-end="url(#vmd4-arrow-red)"/>
+                <text x="815" y="308" text-anchor="start" class="vmd4-label">ioctl calls</text>
+              </g>
+
+              <!-- step 6: vCPU connector (horizontal) -->
+              <g id="vmd4-vcpu" class="vmd4-reveal">
+                <line x1="358" y1="155" x2="642" y2="155" class="vmd4-line-dashed-red" marker-start="url(#vmd4-arrow-red-l)" marker-end="url(#vmd4-arrow-red-r)"/>
+                <rect x="425" y="132" width="150" height="52" class="vmd4-note-bg"/>
+                <text x="500" y="152" text-anchor="middle" class="vmd4-label">vCPU threads run</text>
+                <text x="500" y="172" text-anchor="middle" class="vmd4-label">guest kernel + apps</text>
+              </g>
+
+              <defs>
+                <marker id="vmd4-arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#B90E0A"/>
+                </marker>
+                <marker id="vmd4-arrow-red-l" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#B90E0A"/>
+                </marker>
+                <marker id="vmd4-arrow-red-r" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#B90E0A"/>
+                </marker>
+              </defs>
+            </svg>
+          </div>
+
+          <div class="vmd4-controls">
+            <button class="vmd4-btn" id="vmd4Pause" aria-label="Pause animation" title="Pause animation">⏸</button>
+            <button class="vmd4-btn vmd4-btn-spin" id="vmd4Replay" aria-label="Replay animation" title="Replay animation">↻</button>
+          </div>
+
+        </div>
+
+        <style>
+          .vmd4-widget{
+            --white:#FFFFFF;
+            --paper:#FAFAF8;
+            --rule:#E4E1DC;
+            --ink:#1F2328;
+            --red:#B90E0A;
+
+            max-width:800px;
+            margin:0 auto;
+            background:var(--paper);
+            border:1px solid var(--rule);
+            border-radius:10px;
+            padding:28px 28px 24px;
+            font-family:'Segoe UI', -apple-system, Arial, sans-serif;
+            color:var(--ink);
+          }
+          .vmd4-widget *{ box-sizing:border-box; }
+
+          .vmd4-canvas{ width:100%; }
+          .vmd4-canvas svg{ width:100%; height:auto; display:block; overflow:visible; }
+
+          .vmd4-reveal{ opacity:0; transform:translateY(8px); transition:opacity .5s ease, transform .5s ease; }
+          .vmd4-reveal.show{ opacity:1; transform:translateY(0); }
+
+          .vmd4-fill-white{ fill:var(--white); stroke:var(--ink); stroke-width:1.5; }
+          .vmd4-fill-paper{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; }
+          .vmd4-fill-rule{ fill:var(--rule); stroke:var(--ink); stroke-width:1.5; }
+          .vmd4-fill-ink{ fill:var(--ink); stroke:var(--ink); stroke-width:1.5; }
+          .vmd4-dashed-red{ fill:none; stroke:var(--red); stroke-width:2; stroke-dasharray:6 3; }
+
+          .vmd4-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:14px; fill:var(--ink); }
+          .vmd4-label-strong{ font-weight:600; }
+          .vmd4-invert{ fill:var(--paper); }
+          .vmd4-label-red{ fill:var(--red); }
+
+          .vmd4-line-red{ stroke:var(--red); stroke-width:1.75; fill:none; }
+          .vmd4-line-dashed-red{ stroke:var(--red); stroke-width:1.5; stroke-dasharray:5 4; fill:none; }
+          .vmd4-note-bg{ fill:var(--paper); }
+
+          .vmd4-controls{ display:flex; gap:10px; margin-top:18px; }
+          .vmd4-btn{
+            font-family:'Segoe UI', Arial, sans-serif; font-size:18px; line-height:1; font-weight:500; color:var(--ink);
+            background:var(--paper); border:1px solid var(--rule); border-radius:50%;
+            width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
+            cursor:pointer; transition:border-color .15s, color .15s, transform .15s;
+          }
+          .vmd4-btn-spin:active{ transform:rotate(-40deg); }
+          .vmd4-btn:hover{ border-color:var(--red); color:var(--red); }
+        </style>
+
+        <script>
+        (function(){
+          var root = document.getElementById('vmd4Widget');
+          if(!root || root.dataset.vmd4Init) return;
+          root.dataset.vmd4Init = '1';
+
+          var order = [
+            ['vmd4-hardware'],
+            ['vmd4-hostkernel','vmd4-kvm'],
+            ['vmd4-hwArrow'],
+            ['vmd4-vmOuter'],
+            ['vmd4-vmInner'],
+            ['vmd4-ioctl'],
+            ['vmd4-vcpu']
+          ];
+          var STEP_MS = 1200;
+          var START_DELAY = 3000;
+          var HOLD_MS = 10000;
+
+          var timeline = [];
+          var liveTimers = [];
+          var elapsed = 0;
+          var runStartedAt = 0;
+          var paused = false;
+
+          function clearLive(){ liveTimers.forEach(clearTimeout); liveTimers = []; }
+          function at(ms, fn){ timeline.push({ time: ms, fn: fn, done: false }); }
+          function scheduleFrom(elapsedNow){
+            clearLive();
+            runStartedAt = Date.now();
+            timeline.forEach(function(entry){
+              if(entry.done) return;
+              var delay = entry.time - elapsedNow;
+              if(delay <= 0){ entry.done = true; entry.fn(); }
+              else { liveTimers.push(setTimeout(function(){ entry.done = true; entry.fn(); }, delay)); }
+            });
+          }
+          function setPauseUI(isPaused){
+            var btn = root.querySelector('#vmd4Pause');
+            if(!btn) return;
+            btn.textContent = isPaused ? '▶' : '⏸';
+            btn.setAttribute('aria-label', isPaused ? 'Resume animation' : 'Pause animation');
+            btn.setAttribute('title', isPaused ? 'Resume animation' : 'Pause animation');
+          }
+          function togglePause(){
+            if(paused){
+              paused = false;
+              scheduleFrom(elapsed);
+              if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.play(); }); }
+            } else {
+              paused = true;
+              elapsed += Date.now() - runStartedAt;
+              clearLive();
+              if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.pause(); }); }
+            }
+            setPauseUI(paused);
+          }
+
+          function reset(){
+            order.forEach(function(ids){ ids.forEach(function(id){
+              var el = root.querySelector('#'+id); if(el) el.classList.remove('show');
+            }); });
+          }
+
+          function cycle(){
+            clearLive();
+            timeline = [];
+            elapsed = 0;
+            paused = false;
+            setPauseUI(false);
+            reset();
+            var t = START_DELAY;
+            order.forEach(function(ids){
+              at(t, function(){
+                ids.forEach(function(id){
+                  var el = root.querySelector('#'+id);
+                  if(el) el.classList.add('show');
+                });
+              });
+              t += STEP_MS;
+            });
+            t += HOLD_MS;
+            at(t, cycle);
+            scheduleFrom(0);
+          }
+
+          root.querySelector('#vmd4Replay').addEventListener('click', cycle);
+          root.querySelector('#vmd4Pause').addEventListener('click', togglePause);
+
+          cycle();
+        })();
+        </script>
+
+      </div>
+
+      <!-- ============================= SLIDE 2: Guest mode (VM exit / entry) ============================= -->
+      <div class="crsl-slide" data-title="Guest mode: VM exit / entry" data-replay-id="gmReplay">
+
+        <div class="gm-widget" id="gmWidget">
+
+          <div class="gm-canvas">
+            <svg viewBox="0 0 1000 560" id="gmSvg" role="img" aria-label="Diagram showing the CPU switching between guest mode, where guest instructions run natively, and the host, which handles a VM exit before resuming the guest. This example traces one specific cause, an I/O port access, which KVM decodes and the VMM emulates; a timer interrupt would instead be resolved by the host's own scheduler, with no emulation step at all">
+
+              <!-- structural reveal 1: CPU core outer shell -->
+              <g id="gm-outer" class="gm-reveal">
+                <rect x="40" y="20" width="920" height="500" rx="10" class="gm-fill-paper"/>
+                <text x="60" y="44" class="gm-label gm-label-strong">CPU core, VT-x / AMD-V</text>
+                <rect x="740" y="28" width="180" height="42" rx="21" id="gm-mode-pill" class="gm-fill-paper gm-pill"/>
+                <rect x="754" y="40" width="34" height="18" rx="9" id="gm-switch-track" class="gm-switch-track"/>
+                <circle cx="763" cy="49" r="7" id="gm-switch-knob" class="gm-switch-knob"/>
+                <text x="798" y="54" id="gm-mode-text" class="gm-label gm-label-strong">NON-ROOT</text>
+
+                <line x1="60" y1="494" x2="940" y2="494" class="gm-hairline"/>
+                <text x="500" y="514" text-anchor="middle" id="gm-status" class="gm-label gm-status-text">native execution: guest instructions run directly on the CPU</text>
+              </g>
+
+              <!-- structural reveal 2: guest mode box -->
+              <g id="gm-guest" class="gm-reveal">
+                <rect x="70" y="76" width="860" height="150" rx="8" class="gm-dashed-red"/>
+                <text x="90" y="104" class="gm-label gm-label-red gm-label-strong">Guest mode (non-root operation)</text>
+
+                <g id="gm-tape"></g>
+                <rect id="gm-scanhead" x="110" y="126" width="14" height="40" class="gm-scanhead"/>
+              </g>
+
+              <!-- structural reveal 3: host / root-operation box (same visual style as guest mode) -->
+              <g id="gm-hyper" class="gm-reveal">
+                <rect x="70" y="266" width="860" height="200" rx="8" class="gm-dashed-red"/>
+                <text x="90" y="294" class="gm-label gm-label-red gm-label-strong">Host (root operation)</text>
+
+                <rect id="gm-decode" x="110" y="316" width="230" height="100" rx="6" class="gm-fill-paper"/>
+                <text x="225" y="350" text-anchor="middle" class="gm-label gm-label-strong">DECODE</text>
+                <text x="225" y="368" text-anchor="middle" class="gm-label gm-label-small">KVM: why did we exit?</text>
+                <text x="225" y="384" text-anchor="middle" class="gm-label gm-label-small">(this example: an I/O port access)</text>
+
+                <line x1="342" y1="366" x2="368" y2="366" class="gm-line-red" marker-end="url(#gm-arrow-red)"/>
+
+                <rect id="gm-emulate" x="380" y="316" width="230" height="100" rx="6" class="gm-fill-paper"/>
+                <text x="495" y="350" text-anchor="middle" class="gm-label gm-label-strong">EMULATE</text>
+                <text x="495" y="368" text-anchor="middle" class="gm-label gm-label-small">VMM: act on the virtual device</text>
+                <text x="495" y="384" text-anchor="middle" class="gm-label gm-label-small">(skipped for causes like a timer)</text>
+
+                <line x1="612" y1="366" x2="638" y2="366" class="gm-line-red" marker-end="url(#gm-arrow-red)"/>
+
+                <rect id="gm-writeback" x="650" y="316" width="230" height="100" rx="6" class="gm-fill-paper"/>
+                <text x="765" y="354" text-anchor="middle" class="gm-label gm-label-strong">RESUME</text>
+                <text x="765" y="374" text-anchor="middle" class="gm-label gm-label-small">KVM: advance guest state</text>
+              </g>
+
+              <!-- VM EXIT / VM ENTRY arrows drawn LAST so they paint on top of the boxes, not behind them -->
+              <g id="gm-exit-arrow" class="gm-blink">
+                <line x1="250" y1="226" x2="250" y2="264" class="gm-line-red" marker-end="url(#gm-arrow-red)"/>
+                <text x="270" y="250" class="gm-label gm-label-red gm-label-strong">VM EXIT</text>
+              </g>
+              <g id="gm-entry-arrow" class="gm-blink">
+                <line x1="750" y1="264" x2="750" y2="226" class="gm-line-red" marker-end="url(#gm-arrow-red)"/>
+                <text x="655" y="250" class="gm-label gm-label-red gm-label-strong">VM ENTRY</text>
+              </g>
+
+              <defs>
+                <marker id="gm-arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#B90E0A"/>
+                </marker>
+              </defs>
+            </svg>
+          </div>
+
+          <div class="gm-controls">
+            <button class="gm-btn" id="gmPause" aria-label="Pause animation" title="Pause animation">⏸</button>
+            <button class="gm-btn gm-btn-spin" id="gmReplay" aria-label="Replay animation" title="Replay animation">↻</button>
+          </div>
+
+          <p class="gm-note" style="max-width:800px; margin:14px auto 0; font-size:13px; color:var(--muted, #6b6b6b); line-height:1.5;">
+            This traces one specific exit cause, an I/O port access, which KVM decodes and hands to the userspace VMM to emulate.
+            A timer interrupt meant for the host would exit the same way but skip the EMULATE step entirely, proceeding directly to the
+            host's own scheduling work before resuming the guest.
+          </p>
+
+        </div>
+
+        <style>
+          .gm-widget{
+            --white:#FFFFFF;
+            --paper:#FAFAF8;
+            --rule:#E4E1DC;
+            --ink:#1F2328;
+            --red:#B90E0A;
+
+            max-width:800px;
+            margin:0 auto;
+            background:var(--paper);
+            border:1px solid var(--rule);
+            border-radius:10px;
+            padding:28px 28px 24px;
+            font-family:'Segoe UI', -apple-system, Arial, sans-serif;
+            color:var(--ink);
+          }
+          .gm-widget *{ box-sizing:border-box; }
+
+          .gm-canvas{ width:100%; }
+          .gm-canvas svg{ width:100%; height:auto; display:block; overflow:visible; }
+
+          .gm-reveal{ opacity:0; transform:translateY(8px); transition:opacity .5s ease, transform .5s ease; }
+          .gm-reveal.show{ opacity:1; transform:translateY(0); }
+
+          .gm-blink{ opacity:0; transition:opacity .3s ease; }
+          .gm-blink.show{ opacity:1; }
+
+          .gm-fill-paper{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; transition:stroke .2s, stroke-width .2s; }
+          .gm-dashed-red{ fill:var(--white); stroke:var(--red); stroke-width:2; stroke-dasharray:6 3; }
+
+          .gm-active{ stroke:var(--red) !important; stroke-width:2.5 !important; }
+
+          .gm-pill{ transition:stroke .2s; }
+          .gm-pill.gm-root{ stroke:var(--red); }
+
+          .gm-switch-track{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; transition:stroke .2s; }
+          .gm-switch-track.gm-root{ stroke:var(--red); }
+          .gm-switch-knob{ fill:var(--ink); transition:fill .2s, cx .25s ease; }
+          .gm-switch-knob.gm-root{ fill:var(--red); }
+
+          .gm-hairline{ stroke:var(--rule); stroke-width:1; }
+
+          .gm-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:14px; fill:var(--ink); }
+          .gm-label-strong{ font-weight:600; }
+          .gm-label-small{ font-size:12px; }
+          .gm-label-red{ fill:var(--red); }
+          .gm-status-text{ font-size:17px; }
+          #gm-mode-text.gm-root{ fill:var(--red); }
+
+          .gm-line-red{ stroke:var(--red); stroke-width:2; fill:none; }
+          .gm-line-ink{ stroke:var(--ink); stroke-width:1.5; fill:none; }
+
+          .gm-cell{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; transition:stroke .2s, stroke-width .2s; }
+          .gm-cell.gm-trapped{ stroke:var(--red); stroke-width:2.5; }
+          .gm-op{ font-family:'Segoe UI', Arial, sans-serif; font-size:10px; fill:var(--ink); }
+
+          .gm-scanhead{ fill:var(--red); opacity:0; }
+
+          .gm-controls{ display:flex; gap:10px; margin-top:18px; }
+          .gm-btn{
+            font-family:'Segoe UI', Arial, sans-serif; font-size:18px; line-height:1; font-weight:500; color:var(--ink);
+            background:var(--paper); border:1px solid var(--rule); border-radius:50%;
+            width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
+            cursor:pointer; transition:border-color .15s, color .15s, transform .15s;
+          }
+          .gm-btn:hover{ border-color:var(--red); color:var(--red); }
+          .gm-btn-spin:active{ transform:rotate(-40deg); }
+        </style>
+
+        <script>
+        (function(){
+          var root = document.getElementById('gmWidget');
+          if(!root || root.dataset.gmInit) return;
+          root.dataset.gmInit = '1';
+
+          var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+          var TRAP_INDEX = 6;
+          var ops = ['read','calc','check','branch','read','calc','I/O','check','branch','read'];
+          var LAST_INDEX = ops.length - 1;
+          var CELL_STEP = 78;
+          var TRAP_OFFSET = TRAP_INDEX * CELL_STEP;
+          var LAST_OFFSET = LAST_INDEX * CELL_STEP + (70 - 14);
+
+          function buildTape(){
+            var g = root.querySelector('#gm-tape');
+            g.innerHTML = '';
+            for(var i=0;i<10;i++){
+              var x = 110 + i*CELL_STEP;
+              var rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+              rect.setAttribute('class','gm-cell'); rect.setAttribute('id','gm-cell'+i);
+              rect.setAttribute('x',x); rect.setAttribute('y',126); rect.setAttribute('width',70); rect.setAttribute('height',40); rect.setAttribute('rx',5);
+              g.appendChild(rect);
+              var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+              t.setAttribute('class','gm-op'); t.setAttribute('x',x+35); t.setAttribute('y',150); t.setAttribute('text-anchor','middle');
+              t.textContent = ops[i];
+              g.appendChild(t);
+            }
+          }
+          buildTape();
+
+          function show(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('show', !!on); }
+          function active(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('gm-active', !!on); }
+          function setStatus(text){ root.querySelector('#gm-status').textContent = text; }
+          function setMode(rootMode){
+            root.querySelector('#gm-mode-pill').classList.toggle('gm-root', rootMode);
+            root.querySelector('#gm-switch-track').classList.toggle('gm-root', rootMode);
+            var knob = root.querySelector('#gm-switch-knob');
+            knob.classList.toggle('gm-root', rootMode);
+            knob.setAttribute('cx', rootMode ? 777 : 763);
+            var t = root.querySelector('#gm-mode-text');
+            t.classList.toggle('gm-root', rootMode);
+            t.textContent = rootMode ? 'ROOT' : 'NON-ROOT';
+          }
+          function trapped(on){ root.querySelector('#gm-cell'+TRAP_INDEX).classList.toggle('gm-trapped', on); }
+
+          function startScan(durationMs, fromPx, targetPx){
+            var el = root.querySelector('#gm-scanhead');
+            el.style.transition = 'none';
+            el.style.transform = 'translateX(' + fromPx + 'px)';
+            el.style.opacity = 1;
+            void el.offsetWidth;
+            var d = REDUCED ? Math.min(durationMs, 30) : durationMs;
+            requestAnimationFrame(function(){
+              el.style.transition = 'transform ' + d + 'ms linear';
+              el.style.transform = 'translateX(' + targetPx + 'px)';
+            });
+          }
+          function stopScan(){
+            root.querySelector('#gm-scanhead').style.opacity = 0;
+          }
+
+          var STRUCT_STEP = 1100;
+          var BLANK_MS = 400;
+          var SCAN_MS = 5000;
+          var RESUME_MS = Math.round(SCAN_MS / TRAP_INDEX * (LAST_INDEX - TRAP_INDEX));
+          var EXIT_PAUSE = 1300;
+          var SUBSTEP_MS = 1700;
+          var ENTRY_PAUSE = 1300;
+          var HOLD_MS = 6000;
+
+          var timeline = [];
+          var liveTimers = [];
+          var elapsed = 0;
+          var runStartedAt = 0;
+          var paused = false;
+
+          function clearLive(){ liveTimers.forEach(clearTimeout); liveTimers = []; }
+          function at(ms, fn){ timeline.push({ time: ms, fn: fn, done: false }); }
+          function scheduleFrom(elapsedNow){
+            clearLive();
+            runStartedAt = Date.now();
+            timeline.forEach(function(entry){
+              if(entry.done) return;
+              var delay = entry.time - elapsedNow;
+              if(delay <= 0){ entry.done = true; entry.fn(); }
+              else { liveTimers.push(setTimeout(function(){ entry.done = true; entry.fn(); }, delay)); }
+            });
+          }
+          function setPauseUI(isPaused){
+            var btn = root.querySelector('#gmPause');
+            if(!btn) return;
+            btn.textContent = isPaused ? '▶' : '⏸';
+            btn.setAttribute('aria-label', isPaused ? 'Resume animation' : 'Pause animation');
+            btn.setAttribute('title', isPaused ? 'Resume animation' : 'Pause animation');
+          }
+          function togglePause(){
+            if(paused){
+              paused = false;
+              scheduleFrom(elapsed);
+              if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.play(); }); }
+            } else {
+              paused = true;
+              elapsed += Date.now() - runStartedAt;
+              clearLive();
+              if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.pause(); }); }
+            }
+            setPauseUI(paused);
+          }
+
+          function resetAll(){
+            show('gm-outer', false); show('gm-guest', false); show('gm-hyper', false);
+            show('gm-exit-arrow', false); show('gm-entry-arrow', false);
+            active('gm-decode', false); active('gm-emulate', false); active('gm-writeback', false);
+            trapped(false);
+            var el = root.querySelector('#gm-scanhead');
+            el.style.transition = 'none'; el.style.transform = 'translateX(0px)'; el.style.opacity = 0;
+            setMode(false);
+            setStatus('native execution: guest instructions run directly on the CPU');
+          }
+
+          function cycle(){
+            clearLive();
+            timeline = [];
+            elapsed = 0;
+            paused = false;
+            setPauseUI(false);
+            resetAll();
+            var t = BLANK_MS;
+
+            at(t, function(){ show('gm-outer', true); }); t += STRUCT_STEP;
+            at(t, function(){ show('gm-guest', true); }); t += STRUCT_STEP;
+            at(t, function(){ show('gm-hyper', true); }); t += STRUCT_STEP;
+            at(t, function(){ startScan(SCAN_MS, 0, TRAP_OFFSET); });
+
+            t += SCAN_MS;
+            at(t, function(){
+              stopScan();
+              trapped(true);
+              setStatus('I/O port access: the CPU cannot resolve this on its own');
+            });
+            t += EXIT_PAUSE;
+            at(t, function(){
+              show('gm-exit-arrow', true);
+              setMode(true);
+              setStatus('VM exit: control leaves the guest and enters KVM');
+            });
+            t += 900;
+            at(t, function(){ show('gm-exit-arrow', false); active('gm-decode', true); setStatus('KVM decodes the reason for the exit'); });
+            t += SUBSTEP_MS;
+            at(t, function(){ active('gm-decode', false); active('gm-emulate', true); setStatus('the VMM emulates the virtual device; a timer cause would skip this step'); });
+            t += SUBSTEP_MS;
+            at(t, function(){ active('gm-emulate', false); active('gm-writeback', true); setStatus('KVM resumes the guest'); });
+            t += SUBSTEP_MS;
+            at(t, function(){
+              active('gm-writeback', false);
+              show('gm-entry-arrow', true);
+              setMode(false);
+              setStatus('VM entry: the guest resumes execution');
+            });
+            t += ENTRY_PAUSE;
+            at(t, function(){
+              show('gm-entry-arrow', false);
+              trapped(false);
+              setStatus('native execution resumes: the guest continues from the point at which it was interrupted');
+              startScan(RESUME_MS, TRAP_OFFSET, LAST_OFFSET);
+            });
+
+            t += RESUME_MS;
+            at(t, function(){
+              stopScan();
+              setStatus('the guest reaches the end of this instruction sequence');
+            });
+
+            t += HOLD_MS;
+            at(t, cycle);
+            scheduleFrom(0);
+          }
+
+          root.querySelector('#gmReplay').addEventListener('click', cycle);
+          root.querySelector('#gmPause').addEventListener('click', togglePause);
+
+          cycle();
+        })();
+        </script>
+
+      </div>
+
+      <!-- ============================= SLIDE 3: EPT / NPT memory boundary ============================= -->
+      <div class="crsl-slide" data-title="EPT / NPT: the memory boundary" data-replay-id="epReplay">
+
+        <div class="ep-widget" id="epWidget">
+
+          <div class="ep-canvas">
+            <svg viewBox="0 0 1000 460" id="epSvg" role="img" aria-label="Diagram showing a normal memory access translated in two steps from the program's address to the real RAM address, and a second access that gets denied at the hardware checkpoint">
+
+              <!-- structural reveal 1: outer frame -->
+              <g id="ep-outer" class="ep-reveal">
+                <rect x="40" y="20" width="920" height="420" rx="10" class="ep-fill-paper"/>
+                <text x="60" y="44" class="ep-label ep-label-strong">Address translation: guest → host</text>
+                <line x1="60" y1="350" x2="940" y2="350" class="ep-hairline"/>
+                <text x="500" y="372" text-anchor="middle" id="ep-status" class="ep-label ep-status-text">Every memory address a guest uses has to be translated before it reaches real RAM.</text>
+                <text x="500" y="404" text-anchor="middle" class="ep-label ep-label-small">GVA = Guest Virtual Address &nbsp;&middot;&nbsp; GPA = Guest Physical Address &nbsp;&middot;&nbsp; HPA = Host Physical Address</text>
+                <text x="500" y="422" text-anchor="middle" class="ep-label ep-label-small">EPT = Extended Page Tables (Intel) &nbsp;&middot;&nbsp; NPT = Nested Page Tables (AMD)</text>
+              </g>
+
+              <!-- structural reveal 2: row A (normal access) -->
+              <g id="ep-rowA" class="ep-reveal">
+                <text x="60" y="76" class="ep-label ep-label-strong">Normal access</text>
+
+                <rect x="110" y="100" width="130" height="70" rx="6" class="ep-fill-white"/>
+                <text x="175" y="128" text-anchor="middle" class="ep-label ep-label-strong">App's</text>
+                <text x="175" y="144" text-anchor="middle" class="ep-label ep-label-strong">address</text>
+                <text x="175" y="160" text-anchor="middle" class="ep-label ep-label-small">(GVA)</text>
+
+                <line x1="240" y1="135" x2="258" y2="135" class="ep-line-ink" marker-end="url(#ep-arrow-ink)"/>
+
+                <rect id="ep-ptA" x="260" y="100" width="160" height="70" rx="6" class="ep-fill-white"/>
+                <text x="340" y="128" text-anchor="middle" class="ep-label ep-label-strong">Guest page</text>
+                <text x="340" y="144" text-anchor="middle" class="ep-label ep-label-strong">tables</text>
+                <text x="340" y="160" text-anchor="middle" class="ep-label ep-label-small">guest-controlled</text>
+
+                <line x1="420" y1="135" x2="438" y2="135" class="ep-line-ink" marker-end="url(#ep-arrow-ink)"/>
+
+                <rect x="440" y="100" width="130" height="70" rx="6" class="ep-fill-white"/>
+                <text x="505" y="128" text-anchor="middle" class="ep-label ep-label-strong">Guest OS's</text>
+                <text x="505" y="144" text-anchor="middle" class="ep-label ep-label-strong">address</text>
+                <text x="505" y="160" text-anchor="middle" class="ep-label ep-label-small">(GPA)</text>
+
+                <line x1="570" y1="135" x2="588" y2="135" class="ep-line-ink" marker-end="url(#ep-arrow-ink)"/>
+
+                <rect id="ep-eptA" x="590" y="100" width="150" height="70" rx="6" class="ep-fill-white"/>
+                <text x="665" y="138" text-anchor="middle" class="ep-label ep-label-strong">EPT / NPT</text>
+                <text x="665" y="158" text-anchor="middle" class="ep-label ep-label-small">hardware checkpoint</text>
+
+                <line x1="740" y1="135" x2="758" y2="135" class="ep-line-ink" marker-end="url(#ep-arrow-ink)"/>
+
+                <rect x="760" y="100" width="130" height="70" rx="6" class="ep-fill-white"/>
+                <text x="825" y="128" text-anchor="middle" class="ep-label ep-label-strong">Real RAM</text>
+                <text x="825" y="144" text-anchor="middle" class="ep-label ep-label-strong">address</text>
+                <text x="825" y="160" text-anchor="middle" class="ep-label ep-label-small">(HPA)</text>
+              </g>
+
+              <!-- structural reveal 3: row B (blocked access) -->
+              <g id="ep-rowB" class="ep-reveal">
+                <text x="60" y="210" class="ep-label ep-label-strong">Access outside the mapped region</text>
+
+                <rect x="110" y="234" width="130" height="70" rx="6" class="ep-fill-white"/>
+                <text x="175" y="262" text-anchor="middle" class="ep-label ep-label-strong">App's</text>
+                <text x="175" y="278" text-anchor="middle" class="ep-label ep-label-strong">address</text>
+                <text x="175" y="294" text-anchor="middle" class="ep-label ep-label-small">(GVA)</text>
+
+                <line x1="240" y1="269" x2="258" y2="269" class="ep-line-ink" marker-end="url(#ep-arrow-ink)"/>
+
+                <rect id="ep-ptB" x="260" y="234" width="160" height="70" rx="6" class="ep-fill-white"/>
+                <text x="340" y="262" text-anchor="middle" class="ep-label ep-label-strong">Guest page</text>
+                <text x="340" y="278" text-anchor="middle" class="ep-label ep-label-strong">tables</text>
+                <text x="340" y="294" text-anchor="middle" class="ep-label ep-label-small">guest-controlled</text>
+
+                <line x1="420" y1="269" x2="438" y2="269" class="ep-line-ink" marker-end="url(#ep-arrow-ink)"/>
+
+                <rect x="440" y="234" width="130" height="70" rx="6" class="ep-fill-white"/>
+                <text x="505" y="262" text-anchor="middle" class="ep-label ep-label-strong">Guest OS's</text>
+                <text x="505" y="278" text-anchor="middle" class="ep-label ep-label-strong">address</text>
+                <text x="505" y="294" text-anchor="middle" class="ep-label ep-label-small">(GPA)</text>
+
+                <line x1="570" y1="269" x2="672" y2="269" class="ep-line-ink" marker-end="url(#ep-arrow-ink)"/>
+
+                <rect id="ep-wallglow" x="675" y="230" width="6" height="78" class="ep-wall-glow"/>
+                <rect x="680" y="234" width="8" height="70" class="ep-hazard"/>
+
+                <rect id="ep-eptB" x="700" y="234" width="150" height="70" rx="6" class="ep-fill-white"/>
+                <text x="775" y="272" text-anchor="middle" class="ep-label ep-label-strong">EPT / NPT</text>
+                <text x="775" y="292" text-anchor="middle" class="ep-label ep-label-small">hardware checkpoint</text>
+              </g>
+
+              <!-- chips travel on top of both rows -->
+              <g id="ep-chipA-pos" class="ep-chip-pos" transform="translate(0,0)">
+                <g id="ep-chipA" class="ep-chip">
+                  <rect class="ep-chip-rect" width="92" height="26" rx="6"/>
+                  <text class="ep-chip-text" id="ep-chipA-text" x="46" y="18" text-anchor="middle">0x7ffd1234</text>
+                </g>
+              </g>
+              <g id="ep-chipB-pos" class="ep-chip-pos" transform="translate(0,0)">
+                <g id="ep-chipB" class="ep-chip">
+                  <rect class="ep-chip-rect" width="92" height="26" rx="6"/>
+                  <text class="ep-chip-text" id="ep-chipB-text" x="46" y="18" text-anchor="middle">0xdeadbeef</text>
+                </g>
+              </g>
+
+              <defs>
+                <marker id="ep-arrow-ink" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
+                  <path d="M0,0 L7,3.5 L0,7 Z" fill="#1F2328"/>
+                </marker>
+                <pattern id="ep-hazard-pattern" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+                  <rect width="8" height="8" fill="#FAFAF8"/>
+                  <rect width="4" height="8" fill="#B90E0A" opacity="0.55"/>
+                </pattern>
+              </defs>
+            </svg>
+          </div>
+
+          <div class="ep-controls">
+            <button class="ep-btn" id="epPause" aria-label="Pause animation" title="Pause animation">⏸</button>
+            <button class="ep-btn ep-btn-spin" id="epReplay" aria-label="Replay animation" title="Replay animation">↻</button>
+          </div>
+
+        </div>
+
+        <style>
+          .ep-widget{
+            --white:#FFFFFF;
+            --paper:#FAFAF8;
+            --rule:#E4E1DC;
+            --ink:#1F2328;
+            --red:#B90E0A;
+            --green:#1E8E3E;
+
+            max-width:800px;
+            margin:0 auto;
+            background:var(--paper);
+            border:1px solid var(--rule);
+            border-radius:10px;
+            padding:28px 28px 24px;
+            font-family:'Segoe UI', -apple-system, Arial, sans-serif;
+            color:var(--ink);
+          }
+          .ep-widget *{ box-sizing:border-box; }
+
+          .ep-canvas{ width:100%; }
+          .ep-canvas svg{ width:100%; height:auto; display:block; overflow:visible; }
+
+          .ep-reveal{ opacity:0; transform:translateY(8px); transition:opacity .5s ease, transform .5s ease; }
+          .ep-reveal.show{ opacity:1; transform:translateY(0); }
+
+          .ep-fill-white{ fill:var(--white); stroke:var(--ink); stroke-width:1.5; transition:stroke .2s, stroke-width .2s; }
+          .ep-fill-paper{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; }
+          .ep-ghost{ fill:none; stroke:var(--ink); stroke-width:1.5; stroke-dasharray:5 4; opacity:0.55; }
+          .ep-hazard{ fill:url(#ep-hazard-pattern); }
+          .ep-wall-glow{ fill:var(--red); opacity:0; transition:opacity .2s ease; }
+
+          .ep-active{ stroke:var(--red) !important; stroke-width:2.5 !important; }
+          .ep-pass{ stroke:var(--green) !important; stroke-width:2.5 !important; }
+
+          .ep-hairline{ stroke:var(--rule); stroke-width:1; }
+
+          .ep-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:13px; fill:var(--ink); }
+          .ep-label-strong{ font-weight:600; }
+          .ep-label-small{ font-size:10.5px; fill:rgba(31,35,40,0.6); }
+          .ep-status-text{ font-size:17px; }
+
+          .ep-line-ink{ stroke:var(--ink); stroke-width:1.5; fill:none; }
+
+          .ep-chip-pos{ transition:transform .9s ease; }
+          .ep-chip{ opacity:0; transition:opacity .3s ease; }
+          .ep-chip.show{ opacity:1; }
+          .ep-chip-rect{ fill:var(--white); stroke:var(--ink); stroke-width:1.5; transition:stroke .2s, fill .2s; }
+          .ep-chip.ep-denied .ep-chip-rect{ stroke:var(--red); fill:var(--white); }
+          .ep-chip.ep-approved .ep-chip-rect{ stroke:var(--green); fill:var(--white); }
+          .ep-chip-text{ font-family:'Segoe UI', Arial, sans-serif; font-size:11px; fill:var(--ink); }
+          .ep-chip.ep-denied .ep-chip-text{ fill:var(--red); font-weight:700; }
+          .ep-chip.ep-approved .ep-chip-text{ fill:var(--green); font-weight:700; }
+
+          @keyframes ep-bounce{ 0%,100%{ transform:translateX(0); } 50%{ transform:translateX(-7px); } }
+          .ep-chip.ep-bounce{ animation:ep-bounce .28s ease 3; }
+
+          .ep-controls{ display:flex; gap:10px; margin-top:18px; }
+          .ep-btn{
+            font-family:'Segoe UI', Arial, sans-serif; font-size:18px; line-height:1; font-weight:500; color:var(--ink);
+            background:var(--paper); border:1px solid var(--rule); border-radius:50%;
+            width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
+            cursor:pointer; transition:border-color .15s, color .15s, transform .15s;
+          }
+          .ep-btn:hover{ border-color:var(--red); color:var(--red); }
+          .ep-btn-spin:active{ transform:rotate(-40deg); }
+        </style>
+
+        <script>
+        (function(){
+          var root = document.getElementById('epWidget');
+          if(!root || root.dataset.epInit) return;
+          root.dataset.epInit = '1';
+
+          function show(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('show', !!on); }
+          function active(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('ep-active', !!on); }
+          function passBox(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('ep-pass', !!on); }
+          function setStatus(text){ root.querySelector('#ep-status').textContent = text; }
+          function moveChip(posId, x, y){ root.querySelector('#'+posId).style.transform = 'translate(' + x + 'px,' + y + 'px)'; }
+          function setChipText(textId, text){ root.querySelector('#'+textId).textContent = text; }
+
+          var ROW_A_Y = 122, ROW_B_Y = 256;
+          var X_ADDR1 = 129, X_PT = 294, X_ADDR2 = 459, X_EPT = 619, X_ADDR3 = 779;
+          var X_WALL_STOP = 586;
+
+          var STRUCT_STEP = 900;
+          var BLANK_MS = 400;
+          var HOP_MS = 1400;
+          var READ_PAUSE = 1500;
+          var ROW_HOLD = 2600;
+          var ROW_GAP = 900;
+          var FINAL_HOLD = 6000;
+
+          var timeline = [];
+          var liveTimers = [];
+          var elapsed = 0;
+          var runStartedAt = 0;
+          var paused = false;
+
+          function clearLive(){ liveTimers.forEach(clearTimeout); liveTimers = []; }
+          function at(ms, fn){ timeline.push({ time: ms, fn: fn, done: false }); }
+          function scheduleFrom(elapsedNow){
+            clearLive();
+            runStartedAt = Date.now();
+            timeline.forEach(function(entry){
+              if(entry.done) return;
+              var delay = entry.time - elapsedNow;
+              if(delay <= 0){ entry.done = true; entry.fn(); }
+              else { liveTimers.push(setTimeout(function(){ entry.done = true; entry.fn(); }, delay)); }
+            });
+          }
+          function setPauseUI(isPaused){
+            var btn = root.querySelector('#epPause');
+            if(!btn) return;
+            btn.textContent = isPaused ? '▶' : '⏸';
+            btn.setAttribute('aria-label', isPaused ? 'Resume animation' : 'Pause animation');
+            btn.setAttribute('title', isPaused ? 'Resume animation' : 'Pause animation');
+          }
+          function togglePause(){
+            if(paused){
+              paused = false;
+              scheduleFrom(elapsed);
+              if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.play(); }); }
+            } else {
+              paused = true;
+              elapsed += Date.now() - runStartedAt;
+              clearLive();
+              if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.pause(); }); }
+            }
+            setPauseUI(paused);
+          }
+
+          function resetAll(){
+            show('ep-outer', false); show('ep-rowA', false); show('ep-rowB', false);
+            active('ep-ptA', false); active('ep-eptA', false); passBox('ep-eptA', false);
+            active('ep-ptB', false); active('ep-eptB', false);
+            root.querySelector('#ep-wallglow').style.opacity = 0;
+
+            var chipA = root.querySelector('#ep-chipA');
+            chipA.classList.remove('show', 'ep-denied', 'ep-approved', 'ep-bounce');
+            setChipText('ep-chipA-text', '0x7ffd1234');
+            moveChip('ep-chipA-pos', X_ADDR1, ROW_A_Y);
+
+            var chipB = root.querySelector('#ep-chipB');
+            chipB.classList.remove('show', 'ep-denied', 'ep-approved', 'ep-bounce');
+            setChipText('ep-chipB-text', '0xdeadbeef');
+            moveChip('ep-chipB-pos', X_ADDR1, ROW_B_Y);
+
+            setStatus('Every memory address a guest uses has to be translated before it reaches real RAM.');
+          }
+
+          function cycle(){
+            clearLive();
+            timeline = [];
+            elapsed = 0;
+            paused = false;
+            setPauseUI(false);
+            resetAll();
+            var t = BLANK_MS;
+
+            at(t, function(){ show('ep-outer', true); }); t += STRUCT_STEP;
+            at(t, function(){ show('ep-rowA', true); }); t += STRUCT_STEP;
+            at(t, function(){ show('ep-rowB', true); }); t += STRUCT_STEP;
+
+            at(t, function(){
+              moveChip('ep-chipA-pos', X_ADDR1, ROW_A_Y);
+              root.querySelector('#ep-chipA').classList.add('show');
+              setStatus('A normal access starts with the address the app itself uses.');
+            });
+            t += READ_PAUSE;
+
+            at(t, function(){
+              active('ep-ptA', true);
+              moveChip('ep-chipA-pos', X_PT, ROW_A_Y);
+              setStatus('The guest\u2019s own page tables translate it. This step is entirely up to the guest.');
+            });
+            t += HOP_MS;
+            at(t, function(){ active('ep-ptA', false); });
+            t += 300;
+
+            at(t, function(){
+              setChipText('ep-chipA-text', '0x3fa21000');
+              moveChip('ep-chipA-pos', X_ADDR2, ROW_A_Y);
+              setStatus('This is now the address the guest OS believes is physical memory.');
+            });
+            t += HOP_MS;
+            t += READ_PAUSE;
+
+            at(t, function(){
+              passBox('ep-eptA', true);
+              moveChip('ep-chipA-pos', X_EPT, ROW_A_Y);
+              setStatus('EPT / NPT translates it again, in hardware, on every single access.');
+            });
+            t += HOP_MS;
+
+            at(t, function(){
+              root.querySelector('#ep-chipA').classList.add('ep-approved');
+              setChipText('ep-chipA-text', 'APPROVED');
+              setStatus('The hardware checks it and approves the access.');
+            });
+            t += READ_PAUSE;
+
+            at(t, function(){
+              passBox('ep-eptA', false);
+              root.querySelector('#ep-chipA').classList.remove('ep-approved');
+              setChipText('ep-chipA-text', '0x812fa000');
+              moveChip('ep-chipA-pos', X_ADDR3, ROW_A_Y);
+              setStatus('This is the real address in physical RAM, and the access is permitted.');
+            });
+            t += HOP_MS;
+            t += ROW_HOLD;
+
+            at(t, function(){ root.querySelector('#ep-chipA').classList.remove('show'); });
+            t += ROW_GAP;
+
+            at(t, function(){
+              moveChip('ep-chipB-pos', X_ADDR1, ROW_B_Y);
+              root.querySelector('#ep-chipB').classList.add('show');
+              setStatus('Consider a guest attempting to reach memory it was never allocated.');
+            });
+            t += READ_PAUSE;
+
+            at(t, function(){
+              active('ep-ptB', true);
+              moveChip('ep-chipB-pos', X_PT, ROW_B_Y);
+              setStatus('It still walks its own page tables and obtains a guest address. This step always succeeds.');
+            });
+            t += HOP_MS;
+            at(t, function(){ active('ep-ptB', false); });
+            t += 300;
+
+            at(t, function(){
+              setChipText('ep-chipB-text', '0x99910a00');
+              moveChip('ep-chipB-pos', X_ADDR2, ROW_B_Y);
+              setStatus('The guest believes this is a perfectly valid address.');
+            });
+            t += HOP_MS;
+            t += READ_PAUSE;
+
+            at(t, function(){
+              active('ep-eptB', true);
+              moveChip('ep-chipB-pos', X_WALL_STOP, ROW_B_Y);
+              setStatus('The access then reaches the EPT / NPT check in hardware.');
+            });
+            t += HOP_MS;
+            t += 350;
+
+            at(t, function(){
+              root.querySelector('#ep-wallglow').style.opacity = 1;
+              root.querySelector('#ep-chipB').classList.add('ep-bounce', 'ep-denied');
+              setChipText('ep-chipB-text', 'DENIED');
+              setStatus('There is no mapping for it, and the hardware denies the access.');
+            });
+            t += 1100;
+
+            at(t, function(){
+              setStatus('No action by the guest can circumvent this check.');
+            });
+
+            t += FINAL_HOLD;
+            at(t, cycle);
+            scheduleFrom(0);
+          }
+
+          root.querySelector('#epReplay').addEventListener('click', cycle);
+          root.querySelector('#epPause').addEventListener('click', togglePause);
+
+          cycle();
+        })();
+        </script>
+
+      </div>
+
+      <!-- To add slide 4 (or more): paste another <div class="crsl-slide" data-title="..." data-replay-id="..."> here -->
+
+    </div>
+
+    <button class="crsl-nav crsl-next" id="crslNext" aria-label="Next diagram">›</button>
+  </div>
+
+  <div class="crsl-dots" id="crslDots"></div>
+
+</div>
+
+<style>
+  .crsl-wrap{
+    --paper:#FAFAF8;
+    --rule:#E4E1DC;
+    --ink:#1F2328;
+    --red:#B90E0A;
+
+    max-width:920px;
+    margin:0 auto;
+    font-family:'Segoe UI', -apple-system, Arial, sans-serif;
+    color:var(--ink);
+  }
+  .crsl-wrap *{ box-sizing:border-box; }
+
+  .crsl-header{
+    display:flex; align-items:baseline; gap:12px;
+    padding:0 8px 12px;
+  }
+  .crsl-counter{ font-size:12px; font-weight:600; color:rgba(31,35,40,0.55); letter-spacing:.03em; }
+  .crsl-title{ font-size:16px; font-weight:600; color:var(--ink); }
+
+  .crsl-viewport{ display:flex; align-items:center; gap:10px; }
+
+  .crsl-slides{ flex:1; min-width:0; }
+  .crsl-slide{ display:none; }
+  .crsl-slide.active{ display:block; animation:crsl-fade .35s ease; }
+  @keyframes crsl-fade{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+
+  .crsl-nav{
+    flex-shrink:0; width:40px; height:40px; border-radius:50%;
+    background:var(--paper); border:1px solid var(--rule); color:var(--ink);
+    font-size:20px; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:border-color .15s, color .15s;
+  }
+  .crsl-nav:hover{ border-color:var(--red); color:var(--red); }
+
+  .crsl-dots{ display:flex; justify-content:center; gap:8px; margin-top:18px; }
+  .crsl-dot{
+    width:9px; height:9px; border-radius:50%; padding:0;
+    background:var(--paper); border:1.5px solid var(--rule); cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .crsl-dot.active{ background:var(--red); border-color:var(--red); }
+</style>
+
+<script>
+(function(){
+  var wrap = document.getElementById('crslWrap');
+  var slides = Array.prototype.slice.call(wrap.querySelectorAll('#crslSlides > .crsl-slide'));
+  var dotsContainer = document.getElementById('crslDots');
+  var counterEl = document.getElementById('crslCounter');
+  var titleEl = document.getElementById('crslTitle');
+  var current = 0;
+
+  slides.forEach(function(s, i){
+    var dot = document.createElement('button');
+    dot.className = 'crsl-dot';
+    dot.setAttribute('aria-label', 'Go to diagram ' + (i + 1));
+    dot.addEventListener('click', function(){ goTo(i); });
+    dotsContainer.appendChild(dot);
+  });
+  var dots = Array.prototype.slice.call(dotsContainer.querySelectorAll('.crsl-dot'));
+
+  function restart(slide){
+    var btnId = slide.getAttribute('data-replay-id');
+    if(!btnId) return;
+    var btn = document.getElementById(btnId);
+    if(btn){ setTimeout(function(){ btn.click(); }, 60); }
+  }
+
+  function render(){
+    slides.forEach(function(s, i){ s.classList.toggle('active', i === current); });
+    dots.forEach(function(d, i){ d.classList.toggle('active', i === current); });
+    counterEl.textContent = (current + 1) + ' / ' + slides.length;
+    titleEl.textContent = 'Figure ' + (current + 1) + ' \u00b7 ' + (slides[current].getAttribute('data-title') || '');
+  }
+
+  function goTo(i){
+    current = ((i % slides.length) + slides.length) % slides.length;
+    render();
+    restart(slides[current]);
+  }
+
+  document.getElementById('crslPrev').addEventListener('click', function(){ goTo(current - 1); });
+  document.getElementById('crslNext').addEventListener('click', function(){ goTo(current + 1); });
+
+  document.addEventListener('keydown', function(e){
+    if(!wrap.getBoundingClientRect() ) return;
+    if(e.key === 'ArrowRight') goTo(current + 1);
+    if(e.key === 'ArrowLeft') goTo(current - 1);
+  });
+
+  render(); // first slide keeps running whatever cycle it already auto-started on page load
+})();
+</script>
+
+</div>
+<!-- =================== END DIAGRAMS CAROUSEL =================== -->
+    <div class="body-copy" style="margin-top:0;">
+      <p>In Figure 1, the stack reads bottom-up as "who talks with what"</p>
+      <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
+        <li><strong>The hardware</strong> exposes VT-x/AMD-V and EPT, discussed earlier, the CPU features that make guest-mode execution and 
+          hardware-enforced memory isolation possible</li>
+        <li><strong>KVM (Kernel-based Virtual Machine)</strong> turns those raw CPU features into a usable interface (i.e., <code>/dev/kvm</code>): create a VM, create vCPUs, map guest 
+          memory.</li>
+        <li><strong>The VMM (Virtual Machine Monitor)</strong> such as QEMU (and later will see for microVM Firecracker<a class="ref-link" href="#ref-2">[2]</a>, Cloud 
+          Hypervisor, etc.) is a userspace process that calls into that <code>/dev/kvm</code> interface via <code>ioctls</code> to create the VM, allocate its 
+          vCPUs (virtual CPUs) and hand over a region of its own memory to serve as the guest's RAM. It also performs the device emulation KVM does not handle 
+          itself.</li>
+        <li><strong>The guest VMs</strong> are vCPU threads inside the VMM process. Each of those threads spends most of its time executing guest 
+          instructions directly on the CPU in guest mode. It only comes back up through KVM to the VMM when something needs emulating (VM exit), 
+          then goes back (VM entry) to resume (refer to Figure 2).</li>
+      </ul>
+
+      <div class="dig-deeper" style="margin-top:20px; margin-bottom:15px;">
+        <button class="dig-toggle" id="digToggleVM"><span class="dig-icon">i</span>Dig deeper<span class="chev">›</span></button>
+        <div class="dig-content" id="digContentVM">
+          <p>Hardware features like Intel VT-x or AMD-V cannot be used directly by programs in the userspace. Operations such as:</p>
+          <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
+            <li>setting up EPT/NPT that translate guest physical addresses to host physical addresses and enforce the isolation boundary.</li>
+            <li>managing the VM entry/exit transitions that involve the CPU switching into and out of guest mode and saving and restoring the state each time.</li>
+          </ul>
+          <p>
+            involve low-level and sensitive setup that needs to be managed by the kernel. They cannot be left to a userspace process to 
+            control them. The KVM module, in the kernel, packages these VT-x or AMD-V operations into a small set of defined commands, exposed 
+            through the special device file <code>/dev/kvm</code>. The VMM (QEMU, Firecracker, Cloud Hypervisor, or whichever userspace process is managing 
+            that VM) opens <code>/dev/kvm</code> and issues a sequence of <code>ioctl()</code> calls* to create a VM, create its vCPUs, and map a region of its own 
+            (i.e., VMM) memory to serve as the guest's physical RAM. That translation, from raw CPU virtualization features to a  
+            straightforward requests any userspace program can issue, is what makes <code>/dev/kvm</code> a usable interface rather than just exposed 
+            hardware.
+          </p>
+          <p>* <code>ioctl()</code> calls are a standard Linux mechanism for sending commands to a device in the kernel.</p>
+        </div>
+      </div>
+      <div class="body-copy" style="margin-top:0;">
+        <p>Now that we understand the role of VMM, KVM, and features such as VT-x and AMD-V, the last point is 
+        to understand where the conventional VMs get heavy.</p>
+        <p>Because the guest OS expects to find a real PC underneath it, a conventional VMM emulates the complete legacy environment: BIOS, 
+          UEFI firmware, chipset, PCI bus, VGA adapter, keyboard controller, and USB controllers. Every time the guest touches one of these 
+          emulated devices, that access traps out as a VM exit, which the VMM then resolves by emulating the behavior the real hardware would 
+          have shown. Consequently, the guest boots the same way as a physical computer: the firmware runs, conducts a power-on self-test, 
+          transfers control to a bootloader (such as GRUB), which then loads the kernel that initializes every one of those emulated devices 
+          through its driver. This entire process highlights why a conventional VM may take several seconds to boot. A microVM does away with almost 
+          all of this: no firmware, no chipset, no PCI bus, no VGA, no USB stack,etc., to emulate.
+        </p>
+        <p>Something to keep in mind, though: traditional VMMs do not emulate all devices in this "slow" way. For devices that experience high traffic 
+          (e.g., network card or disk) it uses <b>virtio</b> which is a paravirtualized interface that allows the guest to run a driver that knows it is actually communicating 
+          with the VMM rather than through registers designed to mimic hardware. Therefore a typical VM device model is a mix between legacy full emulation 
+          for rarely invoked hardware or critical operations, and virtio is used for whatever needs to move data fast. This mix matter for later: <b>a microVM virtualization does not invent 
+          virtio, it just discards the legacy emulation and trims the remaining virtio side down to the bare minimum needed to boot and run.</b>
+        </p>
+      </div>
+      <div class="dig-deeper" style="margin-top:20px; margin-bottom:15px;">
+        <button class="dig-toggle" id="digToggleVM2"><span class="dig-icon">i</span>Dig deeper<span class="chev">›</span></button>
+        <div class="dig-content" id="digContentVM2">
+          <p>To have a sense of scale: QEMU <a class="ref-link" href="#ref-1">[1]</a>, the most widely used general-purpose VMM, is 
+            well over a million lines of code. This is what a purpose-built microVM VMM like Firecracker avoids. Firecracker's entire 
+            codebase, virtio devices, etc., comes in at tens of thousands of lines only <a class="ref-link" href="#ref-2">[2]</a>. </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-heading">How do containers actually work?</div>
+      <div class="body-copy" style="margin-top:0;">
+      <p>The mechanism of containers is completely different from that of VMs. Containers do not rely on hardware virtualization, 
+        instead they are regular processes running under the <b>same kernel</b> as the host (depicted in Figure 4 below), but made to seem isolated using kernel features:
+
+      <div class="crsl-header" style="margin-bottom:8px;">
+        <span class="crsl-title">Figure 4 &middot; Container isolation: namespaces, cgroups and security mechanisms</span>
+      </div>
+      <!-- ===================================================================
+           CONTAINER ISOLATION ANIMATION, pasted in as-is (class names
+           prefixed ct- to avoid collisions with the page's own styles)
+      =================================================================== -->
+      <div class="diagram-wrap">
+
+<div class="ct-widget" id="ctWidget">
+
+  <div class="ct-canvas">
+    <svg viewBox="0 0 1000 660" id="ctSvg" role="img" aria-label="Diagram of two containers and a container runtime inside userspace, sitting on a host kernel whose namespaces, cgroups, and capabilities/seccomp/MAC mechanisms perform live operations against the containers, on top of shared hardware">
+
+      <!-- reveal 1: hardware, foundation, appears first -->
+      <g id="ct-hardware" class="ct-reveal">
+        <rect x="40" y="572" width="920" height="50" rx="8" class="ct-fill-ink"/>
+        <text x="500" y="602" text-anchor="middle" class="ct-label ct-invert">Hardware (CPU, RAM, disk, NIC)</text>
+      </g>
+
+      <!-- reveal 2: host kernel shell, empty -->
+      <g id="ct-hostkernel-shell" class="ct-reveal">
+        <rect x="40" y="382" width="920" height="162" rx="10" class="ct-fill-white"/>
+        <text x="60" y="410" class="ct-label ct-label-strong">Host kernel</text>
+      </g>
+
+      <!-- reveal 3: userspace shell, empty -->
+      <g id="ct-userspace-shell" class="ct-reveal">
+        <rect x="40" y="60" width="920" height="294" rx="10" class="ct-fill-paper"/>
+        <text x="60" y="88" class="ct-label ct-label-strong">Userspace</text>
+      </g>
+
+      <!-- reveal 4: container runtime box -->
+      <g id="ct-runtime" class="ct-reveal">
+        <rect x="140" y="284" width="720" height="54" rx="8" class="ct-fill-white"/>
+        <text x="500" y="316" text-anchor="middle" class="ct-label ct-label-strong">Container runtime</text>
+      </g>
+
+      <!-- reveal 5: the two containers, with contents -->
+      <g id="ct-containers" class="ct-reveal">
+        <!-- left -->
+        <text x="270" y="130" text-anchor="middle" class="ct-label ct-label-red ct-label-strong">Container</text>
+        <rect x="70" y="140" width="400" height="116" rx="8" class="ct-dashed-red"/>
+        <rect x="90" y="166" width="174" height="34" rx="4" class="ct-fill-rule"/><text x="177" y="188" text-anchor="middle" class="ct-label">App 1</text>
+        <rect x="276" y="166" width="174" height="34" rx="4" class="ct-fill-rule"/><text x="363" y="188" text-anchor="middle" class="ct-label">App 2</text>
+        <rect x="90" y="208" width="174" height="34" rx="4" class="ct-fill-paper"/><text x="177" y="230" text-anchor="middle" class="ct-label">Bins/Libs</text>
+        <rect x="276" y="208" width="174" height="34" rx="4" class="ct-fill-paper"/><text x="363" y="230" text-anchor="middle" class="ct-label">Bins/Libs</text>
+
+        <!-- right -->
+        <text x="730" y="130" text-anchor="middle" class="ct-label ct-label-red ct-label-strong">Container</text>
+        <rect x="530" y="140" width="400" height="116" rx="8" class="ct-dashed-red"/>
+        <rect x="550" y="166" width="174" height="34" rx="4" class="ct-fill-rule"/><text x="637" y="188" text-anchor="middle" class="ct-label">App 1</text>
+        <rect x="736" y="166" width="174" height="34" rx="4" class="ct-fill-rule"/><text x="823" y="188" text-anchor="middle" class="ct-label">App 2</text>
+        <rect x="550" y="208" width="174" height="34" rx="4" class="ct-fill-paper"/><text x="637" y="230" text-anchor="middle" class="ct-label">Bins/Libs</text>
+        <rect x="736" y="208" width="174" height="34" rx="4" class="ct-fill-paper"/><text x="823" y="230" text-anchor="middle" class="ct-label">Bins/Libs</text>
+      </g>
+
+      <!-- reveal 6: arrows from containers into the runtime -->
+      <g id="ct-runtime-arrows" class="ct-reveal">
+        <line x1="270" y1="256" x2="270" y2="282" class="ct-line-ink" marker-end="url(#ct-arrow-ink)"/>
+        <text x="284" y="273" class="ct-label ct-label-small">start / stop / logs</text>
+        <line x1="730" y1="256" x2="730" y2="282" class="ct-line-ink" marker-end="url(#ct-arrow-ink)"/>
+        <text x="744" y="273" class="ct-label ct-label-small">start / stop / logs</text>
+      </g>
+
+      <!-- reveal 7: runtime -> host kernel, clone() setup -->
+      <g id="ct-clone-arrow" class="ct-reveal">
+        <line x1="500" y1="338" x2="500" y2="380" class="ct-line-ink" marker-end="url(#ct-arrow-ink)"/>
+        <text x="520" y="364" class="ct-label ct-label-small">clone() with ns/cgroup setup</text>
+      </g>
+
+      <!-- reveal 8: the 3 isolation mechanisms, empty shells -->
+      <g id="ct-mechanisms" class="ct-reveal">
+        <rect id="ct-ns" x="90" y="440" width="258" height="88" rx="6" class="ct-fill-paper"/>
+        <text x="219" y="464" text-anchor="middle" class="ct-label ct-label-strong">Namespaces</text>
+        <g id="ct-nsChips"></g>
+        <text id="ct-ns-op" x="219" y="514" text-anchor="middle" class="ct-label ct-op-text"></text>
+
+        <rect id="ct-cg" x="366" y="440" width="258" height="88" rx="6" class="ct-fill-paper"/>
+        <text x="495" y="464" text-anchor="middle" class="ct-label ct-label-strong">cgroups</text>
+        <g id="ct-cgChips"></g>
+        <text id="ct-cg-op" x="495" y="514" text-anchor="middle" class="ct-label ct-op-text"></text>
+
+        <rect id="ct-cap" x="642" y="440" width="258" height="88" rx="6" class="ct-fill-paper"/>
+        <text x="771" y="464" text-anchor="middle" class="ct-label ct-label-strong">Capabilities / seccomp / MAC</text>
+        <g id="ct-capChips"></g>
+        <text id="ct-cap-op" x="771" y="514" text-anchor="middle" class="ct-label ct-op-text"></text>
+      </g>
+
+      <circle id="ct-pulse" r="5" class="ct-pulse" transform="translate(500,360)"/>
+
+      <!-- reveal 9: the process talks to the kernel directly once running; the runtime is not in this path -->
+      <g id="ct-bypass-arrows" class="ct-reveal">
+        <line x1="110" y1="256" x2="110" y2="380" class="ct-line-dashed-ink" marker-end="url(#ct-arrow-ink)"/>
+        <text x="92" y="305" text-anchor="middle" transform="rotate(-90 92 305)" class="ct-label ct-label-small">direct syscalls</text>
+        <line x1="890" y1="256" x2="890" y2="380" class="ct-line-dashed-ink" marker-end="url(#ct-arrow-ink)"/>
+        <text x="908" y="305" text-anchor="middle" transform="rotate(-90 908 305)" class="ct-label ct-label-small">direct syscalls</text>
+      </g>
+
+      <defs>
+        <marker id="ct-arrow-ink" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="#1F2328"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="ct-controls">
+    <button class="ct-btn" id="ctPause" aria-label="Pause animation" title="Pause animation">⏸</button>
+    <button class="ct-btn ct-btn-spin" id="ctReplay" aria-label="Replay animation" title="Replay animation">↻</button>
+  </div>
+
+</div>
+
+<style>
+  .ct-widget{
+    --white:#FFFFFF;
+    --paper:#FAFAF8;
+    --rule:#E4E1DC;
+    --ink:#1F2328;
+    --red:#B90E0A;
+
+    max-width:800px;
+    margin:0 auto;
+    background:var(--paper);
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:28px 28px 24px;
+    font-family:'Segoe UI', -apple-system, Arial, sans-serif;
+    color:var(--ink);
+  }
+  .ct-widget *{ box-sizing:border-box; }
+
+  .ct-canvas{ width:100%; }
+  .ct-canvas svg{ width:100%; height:auto; display:block; overflow:visible; }
+
+  .ct-reveal{ opacity:0; transform:translateY(8px); transition:opacity .5s ease, transform .5s ease; }
+  .ct-reveal.show{ opacity:1; transform:translateY(0); }
+
+  .ct-fill-white{ fill:var(--white); stroke:var(--ink); stroke-width:1.5; }
+  .ct-fill-paper{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; transition:stroke .2s, stroke-width .2s; }
+  .ct-fill-rule{ fill:var(--rule); stroke:var(--ink); stroke-width:1.5; }
+  .ct-fill-ink{ fill:var(--ink); stroke:var(--ink); stroke-width:1.5; }
+  .ct-dashed-red{ fill:var(--white); stroke:var(--red); stroke-width:2; stroke-dasharray:6 3; }
+
+  .ct-active{ stroke:var(--red) !important; stroke-width:2.5 !important; }
+
+  .ct-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:13px; fill:var(--ink); }
+  .ct-label-strong{ font-weight:600; }
+  .ct-label-small{ font-size:10.5px; fill:rgba(31,35,40,0.6); }
+  .ct-label-red{ fill:var(--red); }
+  .ct-invert{ fill:var(--paper); }
+  .ct-op-text{ font-size:11px; fill:var(--red); font-weight:600; opacity:0; transition:opacity .3s ease; }
+  .ct-op-text.show{ opacity:1; }
+
+  .ct-line-ink{ stroke:var(--ink); stroke-width:1.5; fill:none; }
+  .ct-line-dashed-ink{ stroke:var(--ink); stroke-width:1.5; stroke-dasharray:5 4; fill:none; }
+  .ct-pulse{ fill:var(--red); opacity:0; transition:transform .5s ease, opacity .2s ease; }
+
+  .ct-chip{ opacity:0; transform:translateY(6px); transition:opacity .3s ease, transform .3s ease; }
+  .ct-chip.show{ opacity:1; transform:none; }
+  .ct-chip-bg{ fill:var(--white); stroke:var(--ink); stroke-width:1.2; }
+  .ct-chip-text{ font-family:'Segoe UI', Arial, sans-serif; font-weight:600; fill:var(--ink); }
+
+  .ct-controls{ display:flex; gap:10px; margin-top:18px; }
+  .ct-btn{
+    font-family:'Segoe UI', Arial, sans-serif; font-size:18px; line-height:1; font-weight:500; color:var(--ink);
+    background:var(--paper); border:1px solid var(--rule); border-radius:50%;
+    width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:border-color .15s, color .15s;
+  }
+  .ct-btn:hover{ border-color:var(--red); color:var(--red); }
+  .ct-btn-spin:active{ transform:rotate(-40deg); }
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('ctWidget');
+  if(!root || root.dataset.ctInit) return;
+  root.dataset.ctInit = '1';
+
+  var NS_ITEMS = ['PID', 'Network', 'Mount', 'UTS', 'User', 'IPC'];
+  var CG_ITEMS = ['CPU', 'Memory', 'I/O'];
+  var CAP_ITEMS = ['Capabilities', 'seccomp', 'MAC'];
+  var MECH_X = { ns: 219, cg: 495, cap: 771 };
+
+  function buildChipRow(groupId, items, boxX, boxWidth, y){
+    var g = root.querySelector('#'+groupId);
+    g.innerHTML = '';
+    var n = items.length;
+    var gap = 6;
+    var chipW = (boxWidth - 20 - gap * (n - 1)) / n;
+    var startX = boxX + 10;
+    items.forEach(function(name, i){
+      var x = startX + i * (chipW + gap);
+      var fontSize = chipW < 45 ? 8 : 9.5;
+      var el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      el.setAttribute('class', 'ct-chip');
+      el.setAttribute('id', groupId + i);
+      el.innerHTML =
+        '<rect class="ct-chip-bg" x="' + x + '" y="' + y + '" width="' + chipW + '" height="20" rx="4"/>' +
+        '<text class="ct-chip-text" x="' + (x + chipW/2) + '" y="' + (y+14) + '" text-anchor="middle" style="font-size:' + fontSize + 'px;">' + name + '</text>';
+      g.appendChild(el);
+    });
+  }
+  buildChipRow('ct-nsChips', NS_ITEMS, 90, 258, 480);
+  buildChipRow('ct-cgChips', CG_ITEMS, 366, 258, 480);
+  buildChipRow('ct-capChips', CAP_ITEMS, 642, 258, 480);
+
+  function show(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('show', !!on); }
+  function active(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('ct-active', !!on); }
+  function showChips(prefix, count, on){ for(var i=0;i<count;i++){ show(prefix+i, on); } }
+  function setOp(id, text){
+    var el = root.querySelector('#'+id);
+    el.textContent = text;
+    el.classList.add('show');
+  }
+  function clearOp(id){
+    var el = root.querySelector('#'+id);
+    el.classList.remove('show');
+  }
+  function pulseTo(targetX){
+    var p = root.querySelector('#ct-pulse');
+    p.style.transition = 'none';
+    p.setAttribute('transform', 'translate(500,360)');
+    p.style.opacity = 1;
+    void p.offsetWidth;
+    p.style.transition = 'transform .5s ease, opacity .2s ease';
+    p.setAttribute('transform', 'translate(' + targetX + ',442)');
+    setTimeout(function(){ p.style.opacity = 0; }, 650);
+  }
+
+  var STRUCT_STEP = 850;
+  var BLANK_MS = 400;
+  var MECH_INTRO = 700;
+  var MECH_DWELL = 2400;
+  var MECH_GAP = 600;
+  var FINAL_HOLD = 6000;
+
+  var timeline = [];
+  var liveTimers = [];
+  var elapsed = 0;
+  var runStartedAt = 0;
+  var paused = false;
+
+  function clearLive(){ liveTimers.forEach(clearTimeout); liveTimers = []; }
+  function at(ms, fn){ timeline.push({ time: ms, fn: fn, done: false }); }
+  function scheduleFrom(elapsedNow){
+    clearLive();
+    runStartedAt = Date.now();
+    timeline.forEach(function(entry){
+      if(entry.done) return;
+      var delay = entry.time - elapsedNow;
+      if(delay <= 0){ entry.done = true; entry.fn(); }
+      else { liveTimers.push(setTimeout(function(){ entry.done = true; entry.fn(); }, delay)); }
+    });
+  }
+  function setPauseUI(isPaused){
+    var btn = root.querySelector('#ctPause');
+    if(!btn) return;
+    btn.textContent = isPaused ? '▶' : '⏸';
+    btn.setAttribute('aria-label', isPaused ? 'Resume animation' : 'Pause animation');
+    btn.setAttribute('title', isPaused ? 'Resume animation' : 'Pause animation');
+  }
+  function togglePause(){
+    if(paused){
+      paused = false;
+      scheduleFrom(elapsed);
+      if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.play(); }); }
+    } else {
+      paused = true;
+      elapsed += Date.now() - runStartedAt;
+      clearLive();
+      if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.pause(); }); }
+    }
+    setPauseUI(paused);
+  }
+
+  function resetAll(){
+    show('ct-hardware', false); show('ct-hostkernel-shell', false); show('ct-userspace-shell', false);
+    show('ct-runtime', false); show('ct-containers', false); show('ct-runtime-arrows', false);
+    show('ct-clone-arrow', false); show('ct-mechanisms', false); show('ct-bypass-arrows', false);
+    active('ct-ns', false); active('ct-cg', false); active('ct-cap', false);
+    showChips('ct-nsChips', NS_ITEMS.length, false);
+    showChips('ct-cgChips', CG_ITEMS.length, false);
+    showChips('ct-capChips', CAP_ITEMS.length, false);
+    clearOp('ct-ns-op'); clearOp('ct-cg-op'); clearOp('ct-cap-op');
+    root.querySelector('#ct-pulse').style.opacity = 0;
+  }
+
+  function cycle(){
+    clearLive();
+    timeline = [];
+    elapsed = 0;
+    paused = false;
+    setPauseUI(false);
+    resetAll();
+    var t = BLANK_MS;
+
+    at(t, function(){ show('ct-hardware', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('ct-hostkernel-shell', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('ct-userspace-shell', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('ct-runtime', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('ct-containers', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('ct-runtime-arrows', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('ct-clone-arrow', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('ct-mechanisms', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('ct-bypass-arrows', true); }); t += STRUCT_STEP + 500;
+
+    at(t, function(){ active('ct-ns', true); pulseTo(MECH_X.ns); showChips('ct-nsChips', NS_ITEMS.length, true); });
+    t += MECH_INTRO;
+    at(t, function(){ setOp('ct-ns-op', 'sees only its own process tree'); });
+    t += MECH_DWELL;
+    at(t, function(){ active('ct-ns', false); });
+    t += MECH_GAP;
+
+    at(t, function(){ active('ct-cg', true); pulseTo(MECH_X.cg); showChips('ct-cgChips', CG_ITEMS.length, true); });
+    t += MECH_INTRO;
+    at(t, function(){ setOp('ct-cg-op', 'usage capped at its cgroup limits'); });
+    t += MECH_DWELL;
+    at(t, function(){ active('ct-cg', false); });
+    t += MECH_GAP;
+
+    at(t, function(){ active('ct-cap', true); pulseTo(MECH_X.cap); showChips('ct-capChips', CAP_ITEMS.length, true); });
+    t += MECH_INTRO;
+    at(t, function(){ setOp('ct-cap-op', 'privileged syscalls checked'); });
+    t += MECH_DWELL;
+    at(t, function(){ active('ct-cap', false); });
+
+    t += FINAL_HOLD;
+    at(t, cycle);
+    scheduleFrom(0);
+  }
+
+  root.querySelector('#ctReplay').addEventListener('click', cycle);
+  root.querySelector('#ctPause').addEventListener('click', togglePause);
+
+  cycle();
+})();
+</script>
+
+      </div>
+      <!-- =================== END CONTAINER ISOLATION ANIMATION =================== -->
+      <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
+        <li style="margin-bottom:12px;"><strong>Namespaces</strong> give a process its own private view of a particular system 
+          resource (e.g., network, filesystem, etc.), despite it executing under the same kernel as every other process on the host. 
+          A PID (Process ID) namespace, for instance, confines a process to its own process hierarchy, so that it sees only itself and its 
+          descendants while the host's other processes remain hidden; a network namespace likewise gives it its own interfaces, addresses and 
+          routing rules; and a mount namespace presents it with its own filesystem view, distinct from the host's actual 
+          filesystem <a class="ref-link" href="#ref-3">[3]</a>.
+        </li> 
+        <li style="margin-bottom:12px;"><strong>cgroups (control groups)</strong> impose quantitative limits on the resources (CPU time, memory, I/O bandwidth) available 
+          to a process or group of processes <a class="ref-link" href="#ref-4">[4]</a>, which is what prevents any single container from monopolizing the host.
+        </li>
+        <li><strong>Security mechanisms</strong> add further constraints beyond namespaces and cgroups. <b>Capabilities</b> break the 
+          "all-or-nothing" root privilege into smaller, individually grantable permissions, while <b>seccomp filters</b> restrict which system 
+          calls a process is allowed to invoke from the kernel at all <a class="ref-link" href="#ref-5">[5]</a>. Finally, <b>MAC (Mandatory Access Control)</b> tools such as AppArmor or SELinux 
+          enforce policies, defined by the administrator, that determine which interactions a process may have with the 
+          resources it sees through its namespaces.
+        </li>
+      </ul>
+
+
+      <p>Because there is no firmware, device emulation, or separate kernel to boot, starting a container translates to just starting a process which takes milliseconds. 
+        The memory overhead is whatever the application itself needs, in addition to a thin runtime.</p>
+
+      <p>This is because container isolation depends entirely on one shared kernel enforcing it correctly. A container receives the same hardware 
+        enforced memory protection that any process receives, namely its own address space via the CPU's page tables, but this is true of every process 
+        on the machine, whether containerized or not, and therefore does not by itself distinguish one tenant's container from another's. The isolation 
+        between containers, provided by namespaces, cgroups, capabilities, and seccomp, is instead software policy enforced by that single shared 
+        kernel. A virtual machine adds something a container does not have: a second, independent hardware check, provided by EPT or NPT, that operates 
+        beneath the guest's own kernel and constrains what that kernel can access, regardless of the kernel's own behavior. Consequently, if the shared 
+        host kernel underlying a set of containers contains a bug in its namespace or system call handling code, the mechanism enforcing the isolation 
+        boundary is itself compromised, with no further layer to fall back on.</p>
+
+      <div class="pull-quote">A virtual machine adds a second, independent hardware check beneath the guest's own kernel. A container has no equivalent second layer beneath the one kernel it shares with everyone else.</div>
+    </div>
+
+  <section class="tracked" id="sec-deepdive">
+  <div class="section-num">3. Why microVMs appeared?</div>
+  <div class="body-copy" style="margin-top:0;">
+    <p>Cloud providers faced a very specific issue. For them to provide services such as FaaS (Functions-as-a-Service), they needed to run code from 
+      thousands of different customers, packed densely onto the same physical servers, and with new instances spinning up and down constantly, often 
+      for a few hundred milliseconds of execution <a class="ref-link" href="#ref-1">[1]</a>. A concrete example of FaaS could be a small function that runs whenever another system sends it a 
+      webhook (i.e., a notification that one system sends automatically to another over the web the instant some event happens, rather than the second 
+      system having to repeatedly check whether anything has occurred) For example, a payment provider might send a webhook to a customer's function 
+      the moment a payment succeeds, carrying the details of that transaction, so the function can react immediately (e.g., updating an order's status) 
+      A Cloud provider runs this function only when such a notification is received. The function runs for a small period of time, e.g., ten to hundreds 
+      of milliseconds, then the Cloud provider terminates its instance. At any given moment, thousands of these short-lived functions, belonging to 
+      different customers, are being triggered and terminated in this same way, and all of them are sharing the same infrastructure. Figure 5 illustrates
+      this density and churn.</p>
+
+    <!-- ===================================================================
+         FAAS DENSITY/CHURN ANIMATION, pasted in as-is (class names
+         prefixed faas- to avoid collisions with the page's own styles)
+    =================================================================== -->
+    <div class="diagram-wrap">
+
+      <div class="crsl-header" style="margin-bottom:8px;">
+        <span class="crsl-title">Figure 5 &middot; FaaS density and churn: many short-lived functions sharing the same hardware</span>
+      </div>
+
+<div class="faas-widget" id="faasWidget">
+
+  <div class="faas-canvas">
+    <svg viewBox="0 0 1000 600" id="faasSvg" role="img" aria-label="Diagram illustrating Functions as a Service: a payment provider appears above the third column 
+    and sends a webhook down to the bottom cell of that column, triggering a short lived function belonging to Customer A, while a grid representing 
+    other customers' functions continuously spins instances up and down, all running on shared underlying hardware">
+
+      <!-- reveal 1: the grid of function cells -->
+      <g id="faas-gridwrap" class="faas-reveal">
+        <g id="faas-ambient"></g>
+
+        <g id="faas-cellA" class="faas-blink">
+          <rect x="510" y="380" width="200" height="100" rx="6" class="faas-dashed-red"/>
+          <text x="610" y="418" text-anchor="middle" class="faas-label faas-label-red faas-label-strong">Customer A</text>
+          <text x="610" y="436" text-anchor="middle" class="faas-label faas-label-small">update order status</text>
+        </g>
+      </g>
+
+      <!-- reveal 2: shared hardware -->
+      <g id="faas-hardware" class="faas-reveal">
+        <rect x="70" y="510" width="860" height="60" rx="8" class="faas-fill-ink"/>
+        <text x="500" y="546" text-anchor="middle" class="faas-label faas-invert">Hardware (CPU, RAM, disk, NIC)</text>
+      </g>
+
+      <!-- appears only for the duration of the webhook event -->
+      <g id="faas-provider" class="faas-blink">
+        <rect x="510" y="40" width="200" height="60" rx="8" class="faas-fill-white"/>
+        <text x="610" y="66" text-anchor="middle" class="faas-label faas-label-strong">Payment</text>
+        <text x="610" y="80" text-anchor="middle" class="faas-label faas-label-strong">provider</text>
+      </g>
+
+      <g id="faas-webhook" class="faas-blink">
+        <line x1="610" y1="100" x2="610" y2="378" class="faas-line-red" marker-end="url(#faas-arrow-red)"/>
+        <text x="622" y="122" class="faas-label faas-label-red faas-label-small">webhook: payment succeeded</text>
+      </g>
+
+      <defs>
+        <marker id="faas-arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#B90E0A"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="faas-controls">
+    <button class="faas-btn" id="faasPause" aria-label="Pause animation" title="Pause animation">⏸</button>
+    <button class="faas-btn faas-btn-spin" id="faasReplay" aria-label="Replay animation" title="Replay animation">↻</button>
+  </div>
+
+</div>
+
+<style>
+  .faas-widget{
+    --white:#FFFFFF;
+    --paper:#FAFAF8;
+    --rule:#E4E1DC;
+    --ink:#1F2328;
+    --red:#B90E0A;
+
+    max-width:800px;
+    margin:0 auto;
+    background:var(--paper);
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:28px 28px 24px;
+    font-family:'Segoe UI', -apple-system, Arial, sans-serif;
+    color:var(--ink);
+  }
+  .faas-widget *{ box-sizing:border-box; }
+
+  .faas-canvas{ width:100%; }
+  .faas-canvas svg{ width:100%; height:auto; display:block; overflow:visible; }
+
+  .faas-reveal{ opacity:0; transform:translateY(8px); transition:opacity .5s ease, transform .5s ease; }
+  .faas-reveal.show{ opacity:1; transform:translateY(0); }
+
+  .faas-blink{ opacity:0; transition:opacity .35s ease; }
+  .faas-blink.show{ opacity:1; }
+
+  .faas-fill-white{ fill:var(--white); stroke:var(--ink); stroke-width:1.5; }
+  .faas-fill-ink{ fill:var(--ink); stroke:var(--ink); stroke-width:1.5; }
+  .faas-dashed-red{ fill:var(--white); stroke:var(--red); stroke-width:2; stroke-dasharray:6 3; }
+
+  .faas-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:13px; fill:var(--ink); }
+  .faas-label-strong{ font-weight:600; }
+  .faas-label-small{ font-size:10.5px; fill:rgba(31,35,40,0.6); }
+  .faas-label-red{ fill:var(--red); }
+  .faas-invert{ fill:var(--paper); font-weight:600; }
+
+  .faas-line-red{ stroke:var(--red); stroke-width:2; fill:none; }
+
+  .faas-cell-bg{ fill:var(--white); stroke:var(--ink); stroke-width:1.2; }
+  .faas-cell-text{ font-family:'Segoe UI', Arial, sans-serif; font-size:10px; fill:rgba(31,35,40,0.7); }
+
+  .faas-controls{ display:flex; gap:10px; margin-top:18px; }
+  .faas-btn{
+    font-family:'Segoe UI', Arial, sans-serif; font-size:18px; line-height:1; font-weight:500; color:var(--ink);
+    background:var(--paper); border:1px solid var(--rule); border-radius:50%;
+    width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:border-color .15s, color .15s;
+  }
+  .faas-btn:hover{ border-color:var(--red); color:var(--red); }
+  .faas-btn-spin:active{ transform:rotate(-40deg); }
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('faasWidget');
+  if(!root || root.dataset.faasInit) return;
+  root.dataset.faasInit = '1';
+
+  var COLS = [70, 290, 510, 730];
+  var ROWS = [140, 260, 380];
+  var CELL_W = 200, CELL_H = 100;
+
+  function buildAmbientCells(){
+    var g = root.querySelector('#faas-ambient');
+    g.innerHTML = '';
+    var n = 2;
+    ROWS.forEach(function(y, ri){
+      COLS.forEach(function(x, ci){
+        if(ri === 2 && ci === 2) return; // reserved for Customer A, bottom of the third column
+        var dur = (1.8 + Math.random() * 1.6).toFixed(2);
+        var delay = (Math.random() * 2.4).toFixed(2);
+        var el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        el.setAttribute('style', 'animation: faas-cellblink ' + dur + 's ease-in-out ' + delay + 's infinite;');
+        el.innerHTML =
+          '<rect class="faas-cell-bg" x="' + x + '" y="' + y + '" width="' + CELL_W + '" height="' + CELL_H + '" rx="6"/>' +
+          '<text class="faas-cell-text" x="' + (x + CELL_W/2) + '" y="' + (y + CELL_H/2 + 4) + '" text-anchor="middle">Customer ' + n + '</text>';
+        g.appendChild(el);
+        n++;
+      });
+    });
+  }
+  buildAmbientCells();
+
+  var styleTag = document.createElement('style');
+  styleTag.textContent = '@keyframes faas-cellblink{ 0%,100%{ opacity:0; } 45%,65%{ opacity:1; } }';
+  document.head.appendChild(styleTag);
+
+  function show(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('show', !!on); }
+
+  var STRUCT_STEP = 900;
+  var BLANK_MS = 400;
+  var BEAT = 2000;
+  var FINAL_HOLD = 1500;
+
+  var timeline = [];
+  var liveTimers = [];
+  var elapsed = 0;
+  var runStartedAt = 0;
+  var paused = false;
+
+  function clearLive(){ liveTimers.forEach(clearTimeout); liveTimers = []; }
+  function at(ms, fn){ timeline.push({ time: ms, fn: fn, done: false }); }
+  function scheduleFrom(elapsedNow){
+    clearLive();
+    runStartedAt = Date.now();
+    timeline.forEach(function(entry){
+      if(entry.done) return;
+      var delay = entry.time - elapsedNow;
+      if(delay <= 0){ entry.done = true; entry.fn(); }
+      else { liveTimers.push(setTimeout(function(){ entry.done = true; entry.fn(); }, delay)); }
+    });
+  }
+  function setPauseUI(isPaused){
+    var btn = root.querySelector('#faasPause');
+    if(!btn) return;
+    btn.textContent = isPaused ? '▶' : '⏸';
+    btn.setAttribute('aria-label', isPaused ? 'Resume animation' : 'Pause animation');
+    btn.setAttribute('title', isPaused ? 'Resume animation' : 'Pause animation');
+  }
+  function togglePause(){
+    if(paused){
+      paused = false;
+      scheduleFrom(elapsed);
+      if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.play(); }); }
+    } else {
+      paused = true;
+      elapsed += Date.now() - runStartedAt;
+      clearLive();
+      if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.pause(); }); }
+    }
+    setPauseUI(paused);
+  }
+
+  function resetAll(){
+    show('faas-gridwrap', false); show('faas-hardware', false);
+    show('faas-provider', false); show('faas-webhook', false); show('faas-cellA', false);
+    buildAmbientCells();
+  }
+
+  function cycle(){
+    clearLive();
+    timeline = [];
+    elapsed = 0;
+    paused = false;
+    setPauseUI(false);
+    resetAll();
+    var t = BLANK_MS;
+
+    at(t, function(){ show('faas-hardware', true); }); t += STRUCT_STEP;
+    at(t, function(){ show('faas-gridwrap', true); }); t += STRUCT_STEP + 600;
+
+    at(t, function(){
+      show('faas-provider', true);
+      show('faas-webhook', true);
+    });
+    t += BEAT;
+
+    at(t, function(){ show('faas-cellA', true); });
+    t += BEAT;
+
+    at(t, function(){
+      show('faas-provider', false);
+      show('faas-webhook', false);
+      show('faas-cellA', false);
+    });
+
+    t += FINAL_HOLD;
+    at(t, cycle);
+    scheduleFrom(0);
+  }
+
+  root.querySelector('#faasReplay').addEventListener('click', cycle);
+  root.querySelector('#faasPause').addEventListener('click', togglePause);
+
+  cycle();
+})();
+</script>
+
+    </div>
+    <!-- =================== END FAAS ANIMATION =================== -->
+
+    <p>This made it hard to satisfy two conflicting requirements:</p>
+
+    <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
+        <li style="margin-bottom:12px;"><strong>Isolation:</strong> The function of customer A must never be able to read the memory of customer B's 
+          function, data, or affect its execution, even if customer function A is malicious. In this case, containers are considered insufficiently 
+          isolated for this multi-tenancy, precisely because of the shared-kernel risk described above.</li> 
+        <li><strong>Speed and density:</strong> a traditional VM per function invocation will be too slow to boot (it can take seconds when the 
+          whole function invocation might last milliseconds) and too heavy in memory (a full guest OS as well as a heavyweight VMM per instance) 
+          to run at the density and pace the business required.</li>
+    </ul>
+    <p>AWS built internally a technology that satisfies these requirements to power Lambda and Fargate. It did release it as open source in 2018 
+      under the name Firecracker which is considered as the project that popularized the term "microVM". 
+    </p>
+
+    <p>AWS was not alone in facing this trade-off. Separate motivation had already been building in the container world itself: projects like 
+      Intel's Clear Containers <a class="ref-link" href="#ref-6">[6]</a> and Hyper.sh's runV <a class="ref-link" href="#ref-7">[7]</a> had spent the 
+      preceding years experimenting with running each container inside a lightweight VM instead of a shared-kernel namespace, to get isolation closer 
+      to a VM's while keeping close to a container's efficiency. Those two projects merged in December 2017 to form Kata Containers 
+      <a class="ref-link" href="#ref-8">[8]</a> <a class="ref-link" href="#ref-9">[9]</a>, about a year before Firecracker was open sourced.</p>
+  </div>
+
+  <div class="dig-deeper" style="margin-top:16px;">
+    <button class="dig-toggle" id="digToggle"><span class="dig-icon">i</span>Dig deeper<span class="chev">›</span></button>
+    <div class="dig-content" id="digContent">
+      <p>Kata Containers is not a virtualization technology, it is a container runtime, the same category of software as <code>runc</code>, and in fact a 
+        replacement for it. It implements the OCI (Open Container Initiative) runtime interface, so Docker, containerd, Kubernetes, etc., can call it 
+        exactly the same way they would call <code>runc</code>, without being aware of the difference. Its job is to take the container image, decides how to run 
+        it, manages its lifecycle, and reports back through the same APIs a real container would use.</p>
+      <p>Instead of using namespaces and cgroups like <code>runc</code> does, Kata Containers runs each container inside an actual VM and it needs a VMM to do that. 
+        That VMM is pluggable, this means that Kata can be configured to use, QEMU (as a full, general-purpose VMM) or Cloud Hypervisor/Firecracker 
+        (microVM + light VMM). Hence, Kata Containers can use microVMs, but does not have to. Whether a given Kata deployment is using a microVM depends 
+        entirely on which VMM backend it is been configured with. Kata itself is agnostic to that choice. What Kata always provides, regardless of 
+        backend, is the layer that makes whatever VM is running underneath look and behave like an ordinary container to Kubernetes: injecting the 
+        container image into the VM, running a small in-guest agent that receives commands the way <code>runc</code> normally would on the host, and wiring up 
+        networking so the container looks completely normal from the outside.</p>
+      <p>In summary, Kata Containers is the integration layer that lets that mechanism sit underneath an unmodified container ecosystem.</p>
+    </div>
+  </div>
+  </section>
+
+  <section class="tracked" id="sec-reflect">
+  <div class="section-num">4. What is a MicroVM and how it works</div>
+  <div class="body-copy" style="margin-top:0;">
+    <p>At its core a microVM is a VM, it uses KVM, real vCPUs, and EPT for hardware memory isolation, exactly as described in Section 2. What differs 
+      is the VMM. Instead of emulating a full generic PC, a microVM VMM implements only a few virtual devices actually needed, and skips the legacy PC 
+      boot sequence entirely. Concretely, this involves several specific engineering choices:</p>
+      <div class="sub-heading">A minimal device model</div>
+      <p>Instead of the full legacy device set described in Section 2, a microVM VMM may expose, for example:</p>
+        <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
+          <li>only one or two virtio devices (built on the paravirtualized mechanism introduced in Section 2) for networking and block storage</li> 
+          <li>a virtio-vsock for host and guest communication</li>
+          <li>a bare serial console for logs.</li>
+       </ul>
+      <p>This is very efficient since there is no need to mimic a specific real chip hardware registers. In fact, the guest virtio driver 
+        communicates with the VMM through shared memory ring buffers called virtqueues. This means that the VMM does not have to reimplement, 
+        for instance, an Intel e1000 NIC register behavior, rather it just have to service a queue of requests. Fewer emulated registers = fewer 
+        possible VM exits + less code + smaller attack surface. The less code an attacker can target through a VM exit means fewer opportunities 
+        to exploit the VMM itself and reach the host.</p>
+      <div class="sub-heading">Direct kernel boot</div>
+      <p>We recall from Section 2 that a traditional VM guest boots as if it were physical hardware (firmware → bootloader → kernel). A microVM VMM 
+        instead loads the guest kernel image directly into the guest memory itself, before the vCPU even starts, and sets the vCPU's initial 
+        instruction pointer straight to the kernel's entry point (following a documented boot protocol, e.g., the Linux kernel boot protocol). 
+        There is no BIOS POST, no bootloader reading from a virtual disk. This alone removes most of the seconds that a traditional VM spends before 
+        it is useful. MicroVMs can reach guest-kernel-running state in roughly 150ms <a class="ref-link" href="#ref-2">[2]</a> (see Figure 5 and Section 5.4 of [2]).</p>
+        <p>The guest kernel itself is usually also trimmed for a specific purpose: a minimal config with unnecessary drivers, filesystems, etc., paired with 
+          a small, often statically-linked root filesystem. This reduces both boot time further and the amount of code running inside the guest that could 
+          itself contain vulnerabilities.</p>
+      <div class="sub-heading">The mechanics of virtualizing each resource</div>
+      <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
+          <li><strong>CPU: </strong>the VMM asks KVM to create one or more vCPUs. Each vCPU is a host thread that enters guest mode (called "VMX non-root operation" on Intel, "guest mode" on AMD) and executes the 
+            guest's actual instructions directly on the physical core. It continues executing at native speed until something happens that the CPU 
+            cannot handle by itself (a privileged instruction, an emulated-device access, etc.), which causes a VM exit back into the VMM/KVM to 
+            handle the event, followed by a VM entry to resume the guest <a class="ref-link" href="#ref-22">[22]</a>. Because a microVM has so few emulated devices, VM exits happen far 
+            less often than in a fully-emulated VM, which is a major reason microVMs also have lower steady-state CPU overhead. Figure 6 contrasts this with full
+            hardware emulation, where each access must trap into the VMM individually.
+
+            <!-- ===================================================================
+                 VIRTIO VS. EMULATION ANIMATION, pasted in as-is (class names
+                 prefixed vt- to avoid collisions with the page's own styles)
+            =================================================================== -->
+            <div class="diagram-wrap" style="margin-top:20px;">
+
+              <div class="crsl-header" style="margin-bottom:8px;">
+                <span class="crsl-title">Figure 6 &middot; Full emulation versus virtio: fewer, batched traps into the VMM</span>
+              </div>
+
+<div class="vt-widget" id="vtWidget">
+
+  <div class="vt-canvas">
+    <svg viewBox="0 0 1000 560" id="vtSvg" role="img" aria-label="Diagram comparing full hardware emulation, where every individual access traps into the VMM separately, with virtio, where the guest writes a descriptor for each of three packets directly into a shared memory virtqueue and a single kick tells the VMM that all three are ready">
+
+      <!-- reveal 1: left column, full emulation -->
+      <g id="vt-left" class="vt-reveal">
+        <rect x="40" y="20" width="440" height="60" rx="8" class="vt-fill-white"/>
+        <text x="260" y="56" text-anchor="middle" class="vt-label vt-label-strong">Guest</text>
+
+        <rect x="40" y="390" width="440" height="60" rx="8" class="vt-fill-white"/>
+        <text x="260" y="426" text-anchor="middle" class="vt-label vt-label-strong">VMM</text>
+
+        <g id="vt-ex1" class="vt-blink">
+          <line x1="80" y1="80" x2="80" y2="388" class="vt-line-red" marker-end="url(#vt-arrow-red)"/>
+          <text x="94" y="150" text-anchor="middle" transform="rotate(-90 94 150)" class="vt-label vt-label-red vt-label-small">send a packet</text>
+        </g>
+        <g id="vt-ex2" class="vt-blink">
+          <line x1="200" y1="80" x2="200" y2="388" class="vt-line-red" marker-end="url(#vt-arrow-red)"/>
+          <text x="214" y="150" text-anchor="middle" transform="rotate(-90 214 150)" class="vt-label vt-label-red vt-label-small">a packet has arrived</text>
+        </g>
+        <g id="vt-ex3" class="vt-blink">
+          <line x1="320" y1="80" x2="320" y2="388" class="vt-line-red" marker-end="url(#vt-arrow-red)"/>
+          <text x="334" y="150" text-anchor="middle" transform="rotate(-90 334 150)" class="vt-label vt-label-red vt-label-small">is the cable connected?</text>
+        </g>
+        <g id="vt-ex4" class="vt-blink">
+          <line x1="440" y1="80" x2="440" y2="388" class="vt-line-red" marker-end="url(#vt-arrow-red)"/>
+          <text x="454" y="150" text-anchor="middle" transform="rotate(-90 454 150)" class="vt-label vt-label-red vt-label-small">how many packets arrived?</text>
+        </g>
+
+        <text x="260" y="475" text-anchor="middle" class="vt-label vt-label-small">each access traps individually</text>
+      </g>
+
+      <!-- reveal 2: right column, virtio -->
+      <g id="vt-right" class="vt-reveal">
+        <rect x="520" y="20" width="440" height="60" rx="8" class="vt-fill-white"/>
+        <text x="740" y="56" text-anchor="middle" class="vt-label vt-label-strong">Guest</text>
+
+        <rect x="520" y="120" width="440" height="140" rx="10" class="vt-fill-white"/>
+        <text x="540" y="144" class="vt-label vt-label-strong">Virtqueue</text>
+        <text x="540" y="160" class="vt-label vt-label-small">descriptors</text>
+
+        <rect id="vt-slot0" x="540" y="190" width="100" height="44" rx="6" class="vt-slot"/>
+        <text id="vt-slot0-text" x="590" y="216" text-anchor="middle" class="vt-label vt-label-small">packet 1</text>
+        <rect id="vt-slot1" x="690" y="190" width="100" height="44" rx="6" class="vt-slot"/>
+        <text id="vt-slot1-text" x="740" y="216" text-anchor="middle" class="vt-label vt-label-small">packet 2</text>
+        <rect id="vt-slot2" x="840" y="190" width="100" height="44" rx="6" class="vt-slot"/>
+        <text id="vt-slot2-text" x="890" y="216" text-anchor="middle" class="vt-label vt-label-small">packet 3</text>
+
+        <rect x="520" y="390" width="440" height="60" rx="8" class="vt-fill-white"/>
+        <text x="740" y="426" text-anchor="middle" class="vt-label vt-label-strong">VMM</text>
+
+        <g id="vt-kickArrow" class="vt-blink">
+          <line x1="740" y1="260" x2="740" y2="388" class="vt-line-red" marker-end="url(#vt-arrow-red)"/>
+          <text x="755" y="330" class="vt-label vt-label-red vt-label-small">kick</text>
+        </g>
+
+        <circle id="vt-token0" r="8" class="vt-token" transform="translate(590,82)"/>
+        <circle id="vt-token1" r="8" class="vt-token" transform="translate(740,82)"/>
+        <circle id="vt-token2" r="8" class="vt-token" transform="translate(890,82)"/>
+
+        <text x="740" y="475" text-anchor="middle" class="vt-label vt-label-small">many requests, one notification</text>
+      </g>
+
+      <line x1="60" y1="505" x2="940" y2="505" class="vt-hairline"/>
+      <text x="500" y="527" text-anchor="middle" id="vt-status" class="vt-label vt-status-text">Consider two ways a guest can ask the host to do work on its behalf.</text>
+
+      <defs>
+        <marker id="vt-arrow-ink" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="#1F2328"/>
+        </marker>
+        <marker id="vt-arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#B90E0A"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="vt-controls">
+    <button class="vt-btn" id="vtPause" aria-label="Pause animation" title="Pause animation">⏸</button>
+    <button class="vt-btn vt-btn-spin" id="vtReplay" aria-label="Replay animation" title="Replay animation">↻</button>
+  </div>
+
+</div>
+
+<style>
+  .vt-widget{
+    --white:#FFFFFF;
+    --paper:#FAFAF8;
+    --rule:#E4E1DC;
+    --ink:#1F2328;
+    --red:#B90E0A;
+
+    max-width:800px;
+    margin:0 auto;
+    background:var(--paper);
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:28px 28px 24px;
+    font-family:'Segoe UI', -apple-system, Arial, sans-serif;
+    color:var(--ink);
+  }
+  .vt-widget *{ box-sizing:border-box; }
+
+  .vt-canvas{ width:100%; }
+  .vt-canvas svg{ width:100%; height:auto; display:block; overflow:visible; }
+
+  .vt-reveal{ opacity:0; transform:translateY(8px); transition:opacity .5s ease, transform .5s ease; }
+  .vt-reveal.show{ opacity:1; transform:translateY(0); }
+
+  .vt-blink{ opacity:0; transition:opacity .3s ease; }
+  .vt-blink.show{ opacity:1; }
+
+  .vt-fill-white{ fill:var(--white); stroke:var(--ink); stroke-width:1.5; }
+
+  .vt-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:13px; fill:var(--ink); }
+  .vt-label-strong{ font-weight:600; }
+  .vt-label-small{ font-size:11px; fill:rgba(31,35,40,0.6); transition:fill .25s; }
+  .vt-label-small.vt-inverted{ fill:var(--paper); }
+  .vt-label-red{ fill:var(--red); }
+  .vt-status-text{ font-size:15.5px; }
+
+  .vt-line-red{ stroke:var(--red); stroke-width:2; fill:none; }
+  .vt-hairline{ stroke:var(--rule); stroke-width:1; }
+
+  .vt-slot{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; transition:fill .25s, stroke .25s; }
+  .vt-slot.vt-filled{ fill:var(--red); stroke:var(--red); }
+
+  .vt-token{ fill:var(--red); opacity:0; transition:transform .5s ease, opacity .2s ease; }
+
+  .vt-controls{ display:flex; gap:10px; margin-top:18px; }
+  .vt-btn{
+    font-family:'Segoe UI', Arial, sans-serif; font-size:18px; line-height:1; font-weight:500; color:var(--ink);
+    background:var(--paper); border:1px solid var(--rule); border-radius:50%;
+    width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:border-color .15s, color .15s;
+  }
+  .vt-btn:hover{ border-color:var(--red); color:var(--red); }
+  .vt-btn-spin:active{ transform:rotate(-40deg); }
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('vtWidget');
+  if(!root || root.dataset.vtInit) return;
+  root.dataset.vtInit = '1';
+
+  var EXAMPLES = ['vt-ex1', 'vt-ex2', 'vt-ex3', 'vt-ex4'];
+  var SLOTS = [
+    { x: 590, top: 82, center: 212 },
+    { x: 740, top: 82, center: 212 },
+    { x: 890, top: 82, center: 212 }
+  ];
+
+  function show(id, on){ var el = root.querySelector('#'+id); if(el) el.classList.toggle('show', !!on); }
+  function setStatus(text){ root.querySelector('#vt-status').textContent = text; }
+
+  function fillSlot(i, on){
+    var el = root.querySelector('#vt-slot'+i);
+    if(el) el.classList.toggle('vt-filled', !!on);
+    var t = root.querySelector('#vt-slot'+i+'-text');
+    if(t) t.classList.toggle('vt-inverted', !!on);
+  }
+
+  function dropToken(i, visible){
+    var el = root.querySelector('#vt-token'+i);
+    var s = SLOTS[i];
+    if(visible){
+      el.style.transform = 'translate(' + s.x + 'px,' + s.top + 'px)';
+      el.style.opacity = 1;
+      el.animate(
+        [
+          { transform: 'translate(' + s.x + 'px,' + s.top + 'px)' },
+          { transform: 'translate(' + s.x + 'px,' + s.center + 'px)' }
+        ],
+        { duration: 600, easing: 'ease', fill: 'forwards' }
+      );
+    } else {
+      el.style.opacity = 0;
+    }
+  }
+
+  var STRUCT_STEP = 900;
+  var BLANK_MS = 400;
+  var BEAT = 1900;
+  var TOKEN_BEAT = 750;
+  var FINAL_HOLD = 6000;
+
+  var timeline = [];
+  var liveTimers = [];
+  var elapsed = 0;
+  var runStartedAt = 0;
+  var paused = false;
+
+  function clearLive(){ liveTimers.forEach(clearTimeout); liveTimers = []; }
+  function at(ms, fn){ timeline.push({ time: ms, fn: fn, done: false }); }
+  function scheduleFrom(elapsedNow){
+    clearLive();
+    runStartedAt = Date.now();
+    timeline.forEach(function(entry){
+      if(entry.done) return;
+      var delay = entry.time - elapsedNow;
+      if(delay <= 0){ entry.done = true; entry.fn(); }
+      else { liveTimers.push(setTimeout(function(){ entry.done = true; entry.fn(); }, delay)); }
+    });
+  }
+  function setPauseUI(isPaused){
+    var btn = root.querySelector('#vtPause');
+    if(!btn) return;
+    btn.textContent = isPaused ? '▶' : '⏸';
+    btn.setAttribute('aria-label', isPaused ? 'Resume animation' : 'Pause animation');
+    btn.setAttribute('title', isPaused ? 'Resume animation' : 'Pause animation');
+  }
+  function togglePause(){
+    if(paused){
+      paused = false;
+      scheduleFrom(elapsed);
+      if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.play(); }); }
+    } else {
+      paused = true;
+      elapsed += Date.now() - runStartedAt;
+      clearLive();
+      if(root.getAnimations){ root.getAnimations({subtree:true}).forEach(function(a){ a.pause(); }); }
+    }
+    setPauseUI(paused);
+  }
+
+  function resetAll(){
+    show('vt-left', false); show('vt-right', false); show('vt-kickArrow', false);
+    EXAMPLES.forEach(function(id){ show(id, false); });
+    for(var i=0;i<3;i++){ fillSlot(i, false); dropToken(i, false); }
+    setStatus('Consider two ways a guest can ask the host to do work on its behalf.');
+  }
+
+  function cycle(){
+    clearLive();
+    timeline = [];
+    elapsed = 0;
+    paused = false;
+    setPauseUI(false);
+    resetAll();
+    var t = BLANK_MS;
+
+    at(t, function(){
+      show('vt-left', true);
+      setStatus('With full emulation, the guest behaves as if real hardware registers exist.');
+    });
+    t += STRUCT_STEP + 500;
+
+    at(t, function(){
+      setStatus('Each individual access, however small, must trap into the VMM separately.');
+    });
+    t += BEAT;
+
+    var emulationCaptions = [
+      'The guest wants to send a packet, and this alone requires a trap.',
+      'Checking whether a packet has arrived requires a separate trap.',
+      'Checking whether the cable is connected requires another trap.',
+      'Even asking how many packets have arrived requires its own trap.'
+    ];
+    EXAMPLES.forEach(function(id, i){
+      at(t, function(){ show(id, true); setStatus(emulationCaptions[i]); });
+      t += BEAT;
+    });
+
+    at(t, function(){
+      show('vt-right', true);
+      setStatus('virtio avoids this by using a shared memory queue instead of individual registers.');
+    });
+    t += STRUCT_STEP + 600;
+
+    at(t, function(){
+      setStatus('Suppose the guest wants to send three packets in a row, all through the same network device.');
+    });
+    t += BEAT;
+
+    var descs = [
+      'It writes a descriptor for the first packet into that device\u2019s virtqueue.',
+      'Then a second descriptor, for the second packet, into the same virtqueue.',
+      'Then a third, for the third packet. None of this requires a trap.'
+    ];
+    SLOTS.forEach(function(s, i){
+      at(t, function(){ dropToken(i, true); setStatus(descs[i]); });
+      t += TOKEN_BEAT;
+      at(t, function(){ fillSlot(i, true); dropToken(i, false); });
+      t += 550;
+    });
+
+    at(t, function(){
+      show('vt-kickArrow', true);
+      setStatus('The guest now sends a single kick to the VMM.');
+    });
+    t += BEAT + 300;
+
+    at(t, function(){
+      show('vt-kickArrow', false);
+      for(var i=0;i<3;i++){ (function(i){ fillSlot(i, false); })(i); }
+      setStatus('The kick carries no data. The VMM reads all three descriptors directly from shared memory.');
+    });
+    t += BEAT + 300;
+
+    at(t, function(){
+      setStatus('Full emulation required four traps for four kinds of access; virtio required one trap for three packets.');
+    });
+    t += BEAT;
+
+    at(t, function(){
+      setStatus('Fewer traps mean less code executed per operation and a smaller attack surface.');
+    });
+
+    t += FINAL_HOLD;
+    at(t, cycle);
+    scheduleFrom(0);
+  }
+
+  root.querySelector('#vtReplay').addEventListener('click', cycle);
+  root.querySelector('#vtPause').addEventListener('click', togglePause);
+
+  cycle();
+})();
+</script>
+
+            </div>
+            <!-- =================== END VIRTIO VS. EMULATION ANIMATION =================== -->
+
+          </li> 
+          <li><strong>Memory: </strong>the VMM allocates (<code>mmap</code>) a region of its own address space to serve as the guest's entire physical RAM, 
+            and registers that region with KVM (via a call like <code>KVM_SET_USER_MEMORY_REGION</code>) <a class="ref-link" href="#ref-23">[23]</a>. 
+            From that point, the CPU's EPT hardware sits underneath the guest's own page tables. The guest translates guest virtual addresses to 
+            guest physical addresses itself, exactly as it would on bare metal. EPT performs the next step, translating those guest physical addresses 
+            into host physical addresses. This is the actual isolation mechanism: it is enforced by the CPU's memory management hardware, not by a software check 
+            that a clever attacker might bypass. Most microVM VMMs require you to specify the memory size up front at creation time, though some 
+            support later resizing via memory ballooning</li>
+          <li><strong>I/O (network/disk): </strong>handled entirely through virtio, the same mechanism a traditional VM uses for its
+            network and disk, the difference being that in a microVM it is the <em>only</em> option, with no legacy emulation alongside it.
+            For networking, the VMM connects a virtio-net device inside the guest to a TAP interface on the host. When the guest sends a
+            packet, its virtio driver places a descriptor in a virtqueue, a ring buffer residing in the guest's memory, which, being a
+            region of the VMM's own address space, both sides can read and write directly, and then signals the VMM through a lightweight KVM 
+            mechanism called an <code>ioeventfd</code>, which resolves the notification inside the kernel and avoids a synchronous round trip into 
+            the userspace VMM for every packet. That notification is
+            necessary because a guest writing to its own memory traps nothing at all; without it the VMM would have to poll the queue
+            continuously. The VMM reads the descriptor, forwards the bytes to the host's network stack through the TAP device, and signals
+            completion back via an <code>irqfd</code> so the guest's driver knows the packet was consumed <a class="ref-link" href="#ref-11">[11]</a><a class="ref-link" href="#ref-10">[10]</a>. Storage works
+            identically with virtio-block: a descriptor specifies an operation and a block offset (for example, "read 4096 bytes starting
+            at block 12345 into this location"), and the VMM translates it into an ordinary read or write at the corresponding byte offset
+            in a backing file or block device on the host. In both cases the VMM's role reduces to translating virtqueue requests into real
+            host operations; it never has to imitate a specific NIC or disk controller chip.</li>
+       </ul>
+  </div>
+  </section>
+
+  <section class="tracked" id="sec-vs">
+  <div class="section-num">5. MicroVM vs. Traditional VM vs. Container</div>
+  <div class="body-copy" style="margin-top:0;">
+    <p>With the mechanics of all three established, the differences can be set side by side. The essential thing to notice is that a
+      microVM shares its <em>isolation column</em> with the traditional VM and its <em>speed column</em> with the container; that
+      combination is the entire reason it exists.</p>
+  </div>
+
+  <div style="overflow-x:auto; margin:24px 0 0;">
+    <table style="width:100%; border-collapse:collapse; font-size:13.5px; line-height:1.6;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1.5px solid var(--ink); font-weight:600; width:22%;"></th>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1.5px solid var(--ink); font-weight:600;">Traditional VM</th>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1.5px solid var(--ink); font-weight:600;">Container</th>
+          <th style="text-align:left; padding:10px 12px; border-bottom:1.5px solid var(--ink); font-weight:600; color:var(--red);">MicroVM</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Isolation mechanism</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Hardware (EPT/NPT + separate kernel)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Software (namespaces + cgroups, shared kernel)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Hardware (EPT/NPT + separate kernel)</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Kernel</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Own full kernel per VM</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Shared host kernel</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Own kernel, usually a trimmed Linux</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Device model</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Full emulated PC (BIOS, PCI, VGA, USB…)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">None: just host syscalls</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Minimal, a few virtio devices only</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Boot path</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Firmware → bootloader → kernel</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">None: fork/exec a process</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Kernel loaded directly by the VMM</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Typical boot time</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Seconds</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Milliseconds</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Tens to low hundreds of milliseconds</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Memory overhead per instance</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">High (guest OS + heavy VMM)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Very low (just the app)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Low (trimmed OS + tiny VMM)</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">VMM / runtime code size</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Large (QEMU: over a million lines)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Not applicable</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Small (tens of thousands of lines)</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Blast radius if compromised</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Contained to that one VM</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Potentially the whole host</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Contained to that one microVM</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Density per host</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Low to medium</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Very high</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">High</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Device passthrough (GPU, USB)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Full support</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Not applicable</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Varies by VMM; none in Firecracker</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; font-weight:500;">Typical use case</td>
+          <td style="padding:10px 12px;">General servers, legacy apps, desktops</td>
+          <td style="padding:10px 12px;">Microservices, app packaging</td>
+          <td style="padding:10px 12px; background:var(--red-soft);">Multi-tenant sandboxes, serverless</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:12px; color:var(--muted); margin:12px 0 0;">Sources: <a class="ref-link" href="#ref-10">[10]</a><a class="ref-link" href="#ref-1">[1]</a><a class="ref-link" href="#ref-3">[3]</a><a class="ref-link" href="#ref-4">[4]</a><a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-11">[11]</a></p>
+  </section>
+
+  <section class="tracked" id="sec-benefits">
+  <div class="section-num">6. Benefits and disadvantages of MicroVMs</div>
+  <div class="body-copy" style="margin-top:0;">
+    <p><strong>Benefits.</strong></p>
+    <ul style="margin:0 0 24px; padding-left:20px; line-height:1.75;">
+      <li><strong>Hardware-enforced isolation between tenants</strong> without paying the full cost of a traditional VM. This is the core
+        value proposition: it is safe to run code you do not trust, belonging to customers who do not trust each other <a class="ref-link" href="#ref-2">[2]</a>.</li>
+      <li><strong>Fast startup</strong>, which makes workloads like serverless functions viable, where a cold start must complete in well
+        under a second <a class="ref-link" href="#ref-2">[2]</a>.</li>
+      <li><strong>Small attack surface.</strong> A minimal device model and a compact, often memory-safe VMM codebase leave fewer places
+        for exploitable defects to hide, and fewer VM exits for an attacker to abuse even where one exists <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-12">[12]</a>.</li>
+      <li><strong>Low overhead per instance</strong> relative to a full VM, permitting far higher density: many more isolated sandboxes on
+        the same physical host <a class="ref-link" href="#ref-2">[2]</a>.</li>
+      <li><strong>Per-tenant kernel flexibility.</strong> Because each microVM runs its own kernel, different tenants can run different
+        kernel versions or configurations side by side.</li>
+      <li><strong>Compatibility with existing ecosystems.</strong> Through projects such as Kata Containers, microVMs can serve as a
+        VM-isolated backend for standard container tooling, so the isolation upgrade does not require abandoning the container
+        workflow <a class="ref-link" href="#ref-9">[9]</a>.</li>
+    </ul>
+
+    <p><strong>Disadvantages and limitations.</strong></p>
+    <ul style="margin:0; padding-left:20px; line-height:1.75;">
+      <li><strong>Still heavier than a container.</strong> Each microVM needs its own kernel resident in memory and its own boot sequence,
+        however fast. A plain container remains lighter and quicker to start, being merely a host process.</li>
+      <li><strong>Limited device support.</strong> The minimal device model that makes microVMs fast and secure also constrains what they
+        can run. Firecracker has no PCI bus and therefore no GPU passthrough at all; Cloud Hypervisor does support VFIO passthrough,
+        so this is a per-VMM design decision rather than an inherent limit of the approach <a class="ref-link" href="#ref-13">[13]</a>.</li>
+      <li><strong>Limited live migration.</strong> Traditional hypervisors have long supported migrating a running VM between hosts with no
+        downtime. The earliest microVM VMMs lacked this entirely; Firecracker later added snapshot and restore, which is useful but not
+        equivalent to full live migration <a class="ref-link" href="#ref-12">[12]</a>.</li>
+      <li><strong>Substantial orchestration work.</strong> A VMM such as Firecracker is a building block, not a platform: there is no
+        scheduler, image registry, or networking control plane. Getting a microVM running is straightforward; running many thousands
+        across a fleet, with per-tenant networking, placement, image distribution, and lifecycle management, is where the real
+        engineering lies <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-9">[9]</a>.</li>
+      <li><strong>Less mature tooling</strong> than decades-old hypervisor platforms or the container ecosystem, though this continues to
+        improve.</li>
+      <li><strong>Requires hardware virtualization.</strong> MicroVMs depend on CPU virtualization extensions being available and exposed
+        to the host, which can be a problem in nested-virtualization environments, and ties implementations to particular architectures,
+        mainly x86_64 and aarch64 today <a class="ref-link" href="#ref-10">[10]</a><a class="ref-link" href="#ref-20">[20]</a><a class="ref-link" href="#ref-21">[21]</a>.</li>
+    </ul>
+  </div>
+  </section>
+
+  <section class="tracked" id="sec-solutions">
+  <div class="section-num">7. Existing MicroVM Solutions</div>
+  <div class="body-copy" style="margin-top:0;">
+    <p><strong>Firecracker</strong> (AWS, open source, Rust) is the project that popularized the term, built originally to power AWS Lambda
+      and Fargate. It combines a minimal device model, virtio for all data path I/O (plus a couple of small legacy devices for console output and 
+      shutdown), direct kernel boot, a REST API over a Unix socket for control, and the
+      jailer wrapper that confines each VMM instance with its own namespaces, cgroups, <code>chroot</code>, unprivileged user and seccomp
+      filter. Later versions added snapshot and restore, allowing an already-booted microVM to be cloned rather than booted afresh
+      <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-12">[12]</a>.</p>
+
+    <p><strong>Cloud Hypervisor</strong> (originally Intel-led, now a broader community project, also Rust) shares building blocks with
+      Firecracker through <strong>rust-vmm</strong>, a set of common Rust crates, including <code>kvm-ioctls</code>, <code>vm-memory</code>, and virtio
+      device implementations, reused across several VMM projects <a class="ref-link" href="#ref-14">[14]</a>. It occupies a similar niche but with a wider feature set:
+      VFIO (Virtual Function I/O) device passthrough, live migration, and support for confidential-computing hardware such as Intel TDX (Trust Domain Extensions)
+      and AMD SEV (Secure Encrypted Virtualization). It is one of
+      the pluggable backends for Kata Containers <a class="ref-link" href="#ref-13">[13]</a>.</p>
+
+    <p><strong>Kata Containers</strong> (OpenInfra Foundation) is not a VMM but an OCI-compatible container <em>runtime</em>: a drop-in
+      replacement for <code>runc</code> that runs each container or pod inside a real virtual machine while still speaking the APIs that
+      containerd, CRI-O and Kubernetes expect. Its VMM is pluggable (QEMU, Cloud Hypervisor, or Firecracker), so a Kata deployment is only
+      using microVMs when configured with one of the latter two. It was born from the 2017 merger of Intel's Clear Containers <a class="ref-link" href="#ref-6">[6]</a> and
+      Hyper.sh's runV <a class="ref-link" href="#ref-7">[7]</a>, and remains the main route by which microVMs reach existing container ecosystems <a class="ref-link" href="#ref-9">[9]</a>.</p>
+
+    <p><strong>QEMU's <code>microvm</code> machine type</strong> offers a stripped-down profile (<code>-M microvm</code>) that drops most
+      legacy PC emulation in favour of a minimal virtio-focused platform for faster boot. It is still QEMU underneath, however, so it does
+      not carry the reduced-codebase security story of a purpose-built minimal VMM <a class="ref-link" href="#ref-1">[1]</a>.</p>
+
+    <p><strong>crosvm</strong> (Google, Rust) is the VMM behind ChromeOS and Android's Linux and Android VMs. It shares rust-vmm heritage
+      with the projects above and pushes sandboxing furthest of any of them, running individual device backends in separate processes with
+      their own seccomp policies, so compromising one backend does not yield the whole VMM <a class="ref-link" href="#ref-15">[15]</a>.</p>
+
+    <p><strong>libkrun</strong> (Red Hat) packages a VMM as a library rather than a standalone binary, letting a program be launched inside
+      a lightweight KVM-isolated VM through a simple API call. It underlies <code>krunvm</code> and Podman's <code>krun</code> platform,
+      and is notably used to give containers genuine Linux-kernel isolation when running on macOS, where it uses Apple's
+      Hypervisor.framework rather than KVM <a class="ref-link" href="#ref-16">[16]</a>.</p>
+
+    <p><strong>Hyperlight</strong> (Microsoft) is a newer and more specialized project aimed at sub-millisecond, extremely lightweight
+      micro-guest sandboxes for small units of code such as WebAssembly modules, pushing the minimalism of the Firecracker approach further
+      still for a narrower use case <a class="ref-link" href="#ref-17">[17]</a>.</p>
+
+    <p><strong>gVisor</strong> (Google) is worth naming for contrast rather than inclusion. It is <em>not</em> a hardware-virtualized
+      microVM: it is a userspace application kernel, called Sentry, that intercepts a container's system calls and reimplements much of the
+      Linux syscall surface itself, interposing a software isolation layer without necessarily booting a separate guest kernel at all. It
+      addresses the same problem, safer multi-tenant sandboxing, by a different mechanism, and is used in App Engine, Cloud Run and GKE
+      Sandbox <a class="ref-link" href="#ref-18">[18]</a>.</p>
+
+    <p>Finally, a related but distinct idea: <strong>unikernels</strong> such as IncludeOS, OSv and MirageOS. Where a microVM minimizes the
+      <em>VMM</em>, a unikernel minimizes the <em>guest</em>, compiling an application together with only the library-OS components it needs
+      into a single specialized kernel image with no general-purpose OS beneath it <a class="ref-link" href="#ref-19">[19]</a>. The two are complementary rather than competing;
+      a unikernel is sometimes run inside a microVM VMM such as Firecracker, combining both kinds of minimalism.</p>
+  </div>
+
+  </section>
+
+  <!-- ===================================================================
+       REFERENCES, numbered as section 8 and included in the left
+       scroll-spy nav, so the indicator tracks it like any other section
+  =================================================================== -->
+  <section class="tracked" id="references" style="margin-top:56px; padding-top:24px; border-top:1px solid var(--rule);">
+    <h2 style="font-size:19px; font-weight:600; margin:0 0 6px; color:var(--ink);">References</h2>
+    <p style="font-size:12.5px; color:var(--muted); margin:0 0 18px;">Sources last verified: September 2026. Some of these projects move quickly (confidential-computing support, pluggable-backend lists, and similarly fast-changing details in particular); check the linked source directly for anything current.</p>
+    <ol class="ref-list" style="list-style:none; margin:0; padding:0; font-size:13px; line-height:1.7; color:var(--muted);">
+      <li id="ref-1" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[1] QEMU Project. QEMU Documentation. <a href="https://www.qemu.org/docs/master/" style="color:var(--red); text-decoration:none;">https://www.qemu.org/docs/master/</a></li>
+      <li id="ref-2" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[2] Agache, A., Brooker, M., Iordache, A., Liguori, A., Neugebauer, R., Piwonka, P., Popa, D.M. "Firecracker: Lightweight Virtualization for Serverless Applications." 17th USENIX Symposium on Networked Systems Design and Implementation (NSDI '20), 2020. <a href="https://www.usenix.org/conference/nsdi20/presentation/agache" style="color:var(--red); text-decoration:none;">https://www.usenix.org/conference/nsdi20/presentation/agache</a></li>
+      <li id="ref-3" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[3] Linux man-pages. namespaces. <a href="https://man7.org/linux/man-pages/man7/namespaces.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/namespaces.7.html</a></li>
+      <li id="ref-4" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[4] Linux man-pages. cgroups. <a href="https://man7.org/linux/man-pages/man7/cgroups.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/cgroups.7.html</a></li>
+      <li id="ref-5" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[5] Linux man-pages. capabilities; Linux Kernel Documentation, Seccomp BPF. <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/capabilities.7.html</a></li>
+      <li id="ref-6" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[6] Intel. Clear Containers, part of the Clear Linux Project. (deprecated; project superseded by Kata Containers following the 2017 merger). <a href="https://github.com/clearcontainers" style="color:var(--red); text-decoration:none;">https://github.com/clearcontainers</a></li>
+      <li id="ref-7" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[7] Hyper.sh. runV. (public archive; Hyper.sh has since ceased operation). <a href="https://github.com/hyperhq/runv" style="color:var(--red); text-decoration:none;">https://github.com/hyperhq/runv</a></li>
+      <li id="ref-8" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[8] Kata Containers Project<a href="https://katacontainers.io/" style="color:var(--red); text-decoration:none;">https://katacontainers.io/</a></li>
+      <li id="ref-9" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[9] Kata Containers Documentation and Architecture, OpenInfra Foundation. <a href="https://github.com/kata-containers/kata-containers" style="color:var(--red); text-decoration:none;">https://github.com/kata-containers/kata-containers</a></li>
+      <li id="ref-10" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[10] Linux Kernel Documentation. Kernel Virtual Machine (KVM). <a href="https://www.kernel.org/doc/html/latest/virt/kvm/" style="color:var(--red); text-decoration:none;">https://www.kernel.org/doc/html/latest/virt/kvm/</a></li>
+      <li id="ref-11" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[11] OASIS. Virtual I/O Device (VIRTIO) Specification. <a href="https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html" style="color:var(--red); text-decoration:none;">https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html</a></li>
+      <li id="ref-12" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[12] Firecracker Project. Documentation, design and security model (including the jailer). <a href="https://firecracker-microvm.github.io/" style="color:var(--red); text-decoration:none;">https://firecracker-microvm.github.io/</a></li>
+      <li id="ref-13" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[13] Cloud Hypervisor Project. Cloud Hypervisor Documentation. <a href="https://www.cloudhypervisor.org/" style="color:var(--red); text-decoration:none;">https://www.cloudhypervisor.org/</a></li>
+      <li id="ref-14" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[14] rust-vmm Project. A set of Rust components for building VMMs. <a href="https://github.com/rust-vmm" style="color:var(--red); text-decoration:none;">https://github.com/rust-vmm</a></li>
+      <li id="ref-15" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[15] Google. crosvm: the Chrome OS Virtual Machine Monitor. <a href="https://chromium.googlesource.com/chromiumos/platform/crosvm/" style="color:var(--red); text-decoration:none;">https://chromium.googlesource.com/chromiumos/platform/crosvm/</a></li>
+      <li id="ref-16" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[16] containers Project. libkrun. <a href="https://github.com/containers/libkrun" style="color:var(--red); text-decoration:none;">https://github.com/containers/libkrun</a></li>
+      <li id="ref-17" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[17] Microsoft. Hyperlight. <a href="https://github.com/hyperlight-dev/hyperlight" style="color:var(--red); text-decoration:none;">https://github.com/hyperlight-dev/hyperlight</a></li>
+      <li id="ref-18" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[18] Google. gVisor Documentation: Architecture Guide. <a href="https://gvisor.dev/docs/" style="color:var(--red); text-decoration:none;">https://gvisor.dev/docs/</a></li>
+      <li id="ref-19" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[19] Madhavapeddy, A., Scott, D.J. "Unikernels: The Rise of the Virtual Library Operating System." Communications of the ACM, 2014. See also IncludeOS, OSv and MirageOS. <a href="https://unikernel.org/" style="color:var(--red); text-decoration:none;">https://unikernel.org/</a></li>
+      <li id="ref-20" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[20] Intel. Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3C: System Programming Guide (VMX and Extended Page Tables). <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" style="color:var(--red); text-decoration:none;">https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html</a></li>
+      <li id="ref-21" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[21] AMD. AMD64 Architecture Programmer's Manual, Volume 2: System Programming (Secure Virtual Machine). <a href="https://www.amd.com/en/support/tech-docs" style="color:var(--red); text-decoration:none;">https://www.amd.com/en/support/tech-docs</a></li>
+      <li id="ref-22" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[22] Improving the Performance of VM Workloads by Optimizing Polling Time. <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/improving-performance-vm-workloads-opt-poll-time.html" style="color:var(--red); text-decoration:none;">https://www.intel.com/content/www/us/en/developer/articles/technical/improving-performance-vm-workloads-opt-poll-time.html</a></li>
+      <li id="ref-23" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[23] The Definitive KVM (Kernel-based Virtual Machine) API Documentation. <a href="https://www.kernel.org/doc/html/latest/virt/kvm/api.html" style="color:var(--red); text-decoration:none;">https://www.kernel.org/doc/html/latest/virt/kvm/api.html</a></li>
+    
+    </ol>
+  </section>
+
+  <div class="footer-nav"><a href="index.html">← Home</a><a href="#">Episode 02 →</a></div>
+
+</div>
+
+<script>
+  (function(){
+    var themeBtn = document.getElementById('themeToggle');
+    var stored = null;
+    try { stored = localStorage.getItem('microvm-theme'); } catch(e) {}
+    if (stored === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', function(){
+        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDark) {
+          document.documentElement.removeAttribute('data-theme');
+          try { localStorage.setItem('microvm-theme', 'light'); } catch(e) {}
+        } else {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          try { localStorage.setItem('microvm-theme', 'dark'); } catch(e) {}
+        }
+      });
+    }
+  })();
+
+  const roadmapBtn = document.getElementById('roadmapBtn');
+  const roadmapStrip = document.getElementById('roadmapStrip');
+  if (roadmapBtn && roadmapStrip) {
+    roadmapBtn.addEventListener('click', () => {
+      roadmapStrip.classList.toggle('open');
+      roadmapBtn.textContent = roadmapStrip.classList.contains('open') ? 'Hide roadmap' : 'View roadmap';
+    });
+    window.addEventListener('scroll', () => {
+      if (roadmapStrip.classList.contains('open')) {
+        roadmapStrip.classList.remove('open');
+        roadmapBtn.textContent = 'View roadmap';
+      }
+    }, { passive: true });
+  }
+
+  const codeSwitch = document.getElementById('codeSwitch');
+  const codeModule = document.getElementById('codeModule');
+  if (codeSwitch && codeModule) {
+    codeSwitch.addEventListener('change', () => codeModule.classList.toggle('open', codeSwitch.checked));
+  }
+
+  const copyBtn = document.getElementById('copyBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const codeBlockEl = document.getElementById('codeBlock');
+      if (codeBlockEl) navigator.clipboard?.writeText(codeBlockEl.innerText);
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => copyBtn.textContent = 'Copy', 1200);
+    });
+  }
+
+  const digToggle = document.getElementById('digToggle');
+  const digContent = document.getElementById('digContent');
+  if (digToggle && digContent) {
+    digToggle.addEventListener('click', () => { digToggle.classList.toggle('open'); digContent.classList.toggle('open'); });
+  }
+
+  const digToggleVM = document.getElementById('digToggleVM');
+  const digContentVM = document.getElementById('digContentVM');
+  if (digToggleVM && digContentVM) {
+    digToggleVM.addEventListener('click', () => { digToggleVM.classList.toggle('open'); digContentVM.classList.toggle('open'); });
+  }
+
+  const digToggleVM2 = document.getElementById('digToggleVM2');
+  const digContentVM2 = document.getElementById('digContentVM2');
+  if (digToggleVM2 && digContentVM2) {
+    digToggleVM2.addEventListener('click', () => { digToggleVM2.classList.toggle('open'); digContentVM2.classList.toggle('open'); });
+  }
+
+  const digToggleContainer = document.getElementById('digToggleContainer');
+  const digContentContainer = document.getElementById('digContentContainer');
+  if (digToggleContainer && digContentContainer) {
+    digToggleContainer.addEventListener('click', () => { digToggleContainer.classList.toggle('open'); digContentContainer.classList.toggle('open'); });
+  }
+
+  // ---- left-side scroll indicator: highlights the section currently in view ----
+  // Uses each section's top edge crossing a fixed line near the top of the
+  // viewport, rather than requiring the section to occupy a mid-screen band.
+  // This is what makes short trailing sections (placeholders, etc.) still get
+  // picked up correctly once you've scrolled past their top, instead of the
+  // indicator getting stuck on whichever earlier section was tallest.
+  const sideNavItems = document.querySelectorAll('.side-nav .sn-item');
+  const trackedSections = Array.from(document.querySelectorAll('section.tracked'));
+  const ACTIVATION_LINE = 120; // px from top of viewport
+
+  const progressBar = document.getElementById('readProgress');
+  function updateReadProgress(){
+    if(!progressBar) return;
+    const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+    const pct = scrollable > 0 ? Math.min(100, Math.max(0, (window.scrollY / scrollable) * 100)) : 0;
+    progressBar.style.width = pct + '%';
+  }
+
+  function updateActiveSection(){
+    let current = trackedSections[0];
+    for (const sec of trackedSections) {
+      if (sec.getBoundingClientRect().top - ACTIVATION_LINE <= 0) {
+        current = sec;
+      }
+    }
+    sideNavItems.forEach(item => {
+      item.classList.toggle('active', current && item.dataset.target === current.id);
+    });
+  }
+
+  window.addEventListener('scroll', updateActiveSection, { passive: true });
+  window.addEventListener('resize', updateActiveSection);
+  window.addEventListener('scroll', updateReadProgress, { passive: true });
+  window.addEventListener('resize', updateReadProgress);
+  updateActiveSection();
+  updateReadProgress();
+
+  sideNavItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById(item.dataset.target).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+</body>
+</html>
