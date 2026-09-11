@@ -31,7 +31,7 @@
   - Normalized paragraph spacing (removed inconsistent inline overrides).
   - Sped up initial animation reveal on all 5 diagrams (was ~3-3.5s idle
     before anything appeared; now ~0.4s), same behavior on replay.
-  - Replaced assembly mnemonics in the guest-mode animation with plain-English
+  - Replaced assembly mnemonics in the guest mode animation with plain-English
     labels (read/calc/check/branch/I-O).
   - Consistent figure numbering (1-5) with titles, and each figure now cited
     at least once in the body text. Disambiguated an in-text reference to
@@ -85,6 +85,7 @@
   html[data-theme="dark"] .ep-widget,
   html[data-theme="dark"] .ct-widget,
   html[data-theme="dark"] .faas-widget,
+  html[data-theme="dark"] .crsl-wrap,
   html[data-theme="dark"] .vt-widget{
     --white:#2A2D33;
     --paper:#1C1F24;
@@ -143,6 +144,14 @@
 
   .ep-header{ padding:40px 0 20px; }
   .eyebrow{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--red); margin-bottom:10px; font-weight:600; }
+  .byline{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 28px;
+    letter-spacing:.01em;
+  }
+  .byline b{ color:var(--ink); font-weight:500; }
   h1{ font-size:30px; font-weight:600; margin:0 0 12px; line-height:1.2; }
   .dek{ font-size:15.5px; color:var(--muted); line-height:1.65; margin:0; max-width:560px; }
 
@@ -268,7 +277,7 @@
     letter-spacing:.01em;
   }
 
-  /* ---- inline reference citation, e.g. <a class="ref-link" href="#ref-11">[11]</a> ---- */
+  /* ---- inline reference citation, e.g. <a class="ref-link" href="#ref-5">[5]</a> ---- */
   .ref-link{
     color:var(--red);
     text-decoration:none;
@@ -313,11 +322,13 @@
   <a class="sn-item" data-target="sec-intro" href="#sec-intro"><span class="sn-dot"></span><span class="sn-label">1. Introduction</span></a>
   <a class="sn-item" data-target="sec-background" href="#sec-background"><span class="sn-dot"></span><span class="sn-label">2. Background</span></a>
   <a class="sn-item" data-target="sec-deepdive" href="#sec-deepdive"><span class="sn-dot"></span><span class="sn-label">3. Why microVMs appeared?</span></a>
-  <a class="sn-item" data-target="sec-reflect" href="#sec-reflect"><span class="sn-dot"></span><span class="sn-label">4. What is a MicroVM and how it works</span></a>
+  <a class="sn-item" data-target="sec-reflect" href="#sec-reflect"><span class="sn-dot"></span><span class="sn-label">4. What is a MicroVM and how it works?</span></a>
   <a class="sn-item" data-target="sec-vs" href="#sec-vs"><span class="sn-dot"></span><span class="sn-label">5. MicroVM vs. VM vs. Container</span></a>
   <a class="sn-item" data-target="sec-benefits" href="#sec-benefits"><span class="sn-dot"></span><span class="sn-label">6. Benefits and disadvantages</span></a>
   <a class="sn-item" data-target="sec-solutions" href="#sec-solutions"><span class="sn-dot"></span><span class="sn-label">7. Existing MicroVM Solutions</span></a>
+  <a class="sn-item" data-target="sec-conclusion" href="#sec-conclusion"><span class="sn-dot"></span><span class="sn-label">8. Conclusion</span></a>
   <a class="sn-item" data-target="references" href="#references"><span class="sn-dot"></span><span class="sn-label">References</span></a>
+  <a class="sn-item" data-target="comments" href="#comments"><span class="sn-dot"></span><span class="sn-label">Comments</span></a>
 </nav>
 
 <div class="page">
@@ -325,6 +336,7 @@
   <div class="ep-header">
     <div class="eyebrow">Episode 01</div>
     <h1>MicroVMs in theory</h1>
+    <p class="byline" id="byline"><b>Dr. Afaf Arfaoui</b> &middot; September 11, 2026 &middot; <span id="readTime">…</span></p>
   </div>
 
   <section class="tracked" id="sec-intro">
@@ -337,7 +349,7 @@
         a security standpoint, operates like a full VM, yet exhibits speed and density close to that of containers.</p>
       <p>
         In this episode we will walk through the background of how VMs and containers function under the hood (starting with
-        the layered view in Figure 1 below), the reason behind the creation of microVMs, and how a microVM virtualizes CPU, memory
+        the layered view in Fig. 1 below), the reason behind the creation of microVMs, and how a microVM virtualizes CPU, memory
         and I/O, which, as we will see, differs far less from a conventional VM than one might expect. We can then compare the three
         virtualization methods and list the benefits and drawbacks of microVMs specifically. At the end of the episode we will be
         discovering existing microVM solutions.
@@ -348,42 +360,42 @@
   <section class="tracked" id="sec-background">
   <div class="section-num">2. Background</div>
 
-    <div class="sub-heading">How does a traditional VM actually work?</div>
+    <div class="sub-heading">How does a traditional VM work?</div>
     <div class="body-copy" style="margin-top:0;">
       <p>A conventional VM, the kind hosted by a hypervisor platform such as VMware ESXi, Xen, QEMU+KVM, or Hyper-V, 
         relies on <b>hardware-assisted virtualization</b>. What does it mean? It means using CPU extensions such as VT-x (Intel) 
         and AMD-V that let a CPU run virtual machines more efficiently. These extensions enable the CPU core to switch, for most guest execution, 
         into a distinct hardware execution mode for running guest code: Intel terms this VMX non-root operation, and AMD terms it guest mode. 
-        This document uses "guest mode" to refer to either. Within guest mode, the guest operating system retains its normal ring 0/ring 3 division 
-        (kernel versus user), exactly as it would on physical hardware. Nothing about the guest's own privilege structure is altered. What changes 
-        is the introduction of a hardware boundary around the entire guest, host and kernel alike. Certain operations, regardless of the ring from 
-        which they originate, are flagged by the CPU as requiring the host's attention. These operations are described under VM exits below and illustrated 
-        in Figure 2.
+        This document uses "guest mode" to refer to either. Within guest mode, the guest operating system keeps its normal internal separation 
+        between kernel-level and user-level code, exactly as it would on physical hardware. A hardware boundary is drawn around the entire guest, 
+        kernel included: certain operations, no matter which part of the guest performs them, are flagged by the CPU as requiring the host's 
+        attention. These operations are described under VM exits below and illustrated 
+        in Fig. 2.
       </p>
 
-      <div class="pull-quote">Nothing about the guest's own privilege structure changes. What is new is a hardware boundary drawn around the entire guest, kernel included.</div>
+      <div class="pull-quote">A hardware boundary surrounds the entire guest, kernel included, regardless of what runs inside it.</div>
 
-      <p>Beyond running guest instructions natively, two further hardware features are what make this 
-        model both safe and practical:</p>
+      <p>Beyond running guest instructions natively, two further hardware features are what make the VM model 
+        both safe and practical:</p>
 
       <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
-        <li style="margin-bottom:12px;"><strong>Extended/Nested Page Tables (EPT/NPT):</strong> Normally, CPU's memory management unit translates 
+        <li style="margin-bottom:12px;"><strong>Extended/Nested Page Tables (EPT/NPT):</strong> Normally, CPU memory management unit translates 
           virtual addresses to physical addresses using <b>page tables</b>. In a VM, there is an extra layer: guest virtual address → guest physical 
           address→ host physical address. EPT/NPT lets the CPU perform that second translation in hardware. This is the actual security boundary 
-          between VMs: the CPU itself checks and translates the guest's memory accesses (see Figure 3 below), ensuring the guest cannot access memory 
+          between VMs: the CPU itself checks and translates the guest's memory accesses (see Fig. 3 below), ensuring the guest cannot access memory 
           outside the region the hypervisor mapped for it, no matter what are its software actions. This hardware-enforced boundary is the most important 
           fact for later understanding why VMs (and microVMs) are considered more isolated than containers.</li>
         <li><strong>VM exits/entries:</strong> Whenever the guest attempts something that the CPU is not able to carry out on its own, such as a 
           privileged instruction, an I/O port access, or a timer interrupt meant for the host, the CPU exits guest mode into KVM (what is called a 
-          "VM exit"). KVM's role here is to set up and execute the actual hardware transition, and to decode why the exit happened. For most 
+          "VM exit"). The KVM role here is to set up and execute the actual hardware transition, and to decode why the exit happened. For most 
           device-related exits, KVM does not emulate anything itself, it packages up the exit reason and hands control to the userspace VMM 
           (e.g., QEMU), which is the piece that actually performs the emulation. KVM does resolve a small number of performance-critical cases entirely 
           on its own, without ever involving the VMM, but that is not the general rule. What happens next depends on the cause of the exit. For an I/O 
           port access, the VMM typically computes the value a real device would have produced and returns it. For a timer interrupt meant for the host, 
-          there is nothing to emulate at all. The host simply uses the moment to run its own scheduler, for example checking whether this vCPU's 
-          timeslice has expired. In either case, the guest resumes with a VM entry (see Figure 2 below) and never becomes aware it was paused. Every VM exit still costs time, 
-          since leaving and re-entering guest mode is not free, which is a large part of why VMM and microVM design focuses on minimizing how often it 
-          happens.</b>.</li>
+          there is nothing to emulate, the host simply uses the moment to run its own scheduler, for example checking whether this vCPU's 
+          timeslice has expired. In either case, the guest resumes with a VM entry (see Fig. 2 below) and never becomes aware it was paused. Every VM exit still costs time, 
+          since leaving and re-entering guest mode is not free, which is a large part of why VMMs and microVM design focuses on minimizing how often it 
+          happens.</li>
       </ul>
     </div>
       
@@ -700,7 +712,7 @@
 
                 <rect id="gm-writeback" x="650" y="316" width="230" height="100" rx="6" class="gm-fill-paper"/>
                 <text x="765" y="354" text-anchor="middle" class="gm-label gm-label-strong">RESUME</text>
-                <text x="765" y="374" text-anchor="middle" class="gm-label gm-label-small">KVM: advance guest state</text>
+                <text x="765" y="374" text-anchor="middle" class="gm-label gm-label-small">KVM: resume the guest</text>
               </g>
 
               <!-- VM EXIT / VM ENTRY arrows drawn LAST so they paint on top of the boxes, not behind them -->
@@ -955,7 +967,7 @@
             t += 900;
             at(t, function(){ show('gm-exit-arrow', false); active('gm-decode', true); setStatus('KVM decodes the reason for the exit'); });
             t += SUBSTEP_MS;
-            at(t, function(){ active('gm-decode', false); active('gm-emulate', true); setStatus('the VMM emulates the virtual device; a timer cause would skip this step'); });
+            at(t, function(){ active('gm-decode', false); active('gm-emulate', true); setStatus('the VMM emulates the virtual device'); });
             t += SUBSTEP_MS;
             at(t, function(){ active('gm-emulate', false); active('gm-writeback', true); setStatus('KVM resumes the guest'); });
             t += SUBSTEP_MS;
@@ -1029,7 +1041,7 @@
 
                 <line x1="420" y1="135" x2="438" y2="135" class="ep-line-ink" marker-end="url(#ep-arrow-ink)"/>
 
-                <rect x="440" y="100" width="130" height="70" rx="6" class="ep-fill-white"/>
+                <rect id="ep-gpaA" x="440" y="100" width="130" height="70" rx="6" class="ep-fill-white"/>
                 <text x="505" y="128" text-anchor="middle" class="ep-label ep-label-strong">Guest OS's</text>
                 <text x="505" y="144" text-anchor="middle" class="ep-label ep-label-strong">address</text>
                 <text x="505" y="160" text-anchor="middle" class="ep-label ep-label-small">(GPA)</text>
@@ -1097,7 +1109,7 @@
 
               <defs>
                 <marker id="ep-arrow-ink" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
-                  <path d="M0,0 L7,3.5 L0,7 Z" fill="#1F2328"/>
+                  <path d="M0,0 L7,3.5 L0,7 Z" fill="var(--ink)"/>
                 </marker>
                 <pattern id="ep-hazard-pattern" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
                   <rect width="8" height="8" fill="#FAFAF8"/>
@@ -1153,7 +1165,7 @@
 
           .ep-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:13px; fill:var(--ink); }
           .ep-label-strong{ font-weight:600; }
-          .ep-label-small{ font-size:10.5px; fill:rgba(31,35,40,0.6); }
+          .ep-label-small{ font-size:10.5px; fill:var(--ink); fill-opacity:0.6; }
           .ep-status-text{ font-size:17px; }
 
           .ep-line-ink{ stroke:var(--ink); stroke-width:1.5; fill:none; }
@@ -1249,6 +1261,7 @@
           function resetAll(){
             show('ep-outer', false); show('ep-rowA', false); show('ep-rowB', false);
             active('ep-ptA', false); active('ep-eptA', false); passBox('ep-eptA', false);
+            passBox('ep-ptA', false); passBox('ep-gpaA', false);
             active('ep-ptB', false); active('ep-eptB', false);
             root.querySelector('#ep-wallglow').style.opacity = 0;
 
@@ -1304,6 +1317,8 @@
 
             at(t, function(){
               passBox('ep-eptA', true);
+              passBox('ep-ptA', true);
+              passBox('ep-gpaA', true);
               moveChip('ep-chipA-pos', X_EPT, ROW_A_Y);
               setStatus('EPT / NPT translates it again, in hardware, on every single access.');
             });
@@ -1318,6 +1333,8 @@
 
             at(t, function(){
               passBox('ep-eptA', false);
+              passBox('ep-ptA', false);
+              passBox('ep-gpaA', false);
               root.querySelector('#ep-chipA').classList.remove('ep-approved');
               setChipText('ep-chipA-text', '0x812fa000');
               moveChip('ep-chipA-pos', X_ADDR3, ROW_A_Y);
@@ -1339,7 +1356,7 @@
             at(t, function(){
               active('ep-ptB', true);
               moveChip('ep-chipB-pos', X_PT, ROW_B_Y);
-              setStatus('It still walks its own page tables and obtains a guest address. This step always succeeds.');
+              setStatus('It still walks its own page tables and obtains a guest address.');
             });
             t += HOP_MS;
             at(t, function(){ active('ep-ptB', false); });
@@ -1416,7 +1433,7 @@
     display:flex; align-items:baseline; gap:12px;
     padding:0 8px 12px;
   }
-  .crsl-counter{ font-size:12px; font-weight:600; color:rgba(31,35,40,0.55); letter-spacing:.03em; }
+  .crsl-counter{ font-size:12px; font-weight:600; color:var(--ink); opacity:0.55; letter-spacing:.03em; }
   .crsl-title{ font-size:16px; font-weight:600; color:var(--ink); }
 
   .crsl-viewport{ display:flex; align-items:center; gap:10px; }
@@ -1473,7 +1490,7 @@
     slides.forEach(function(s, i){ s.classList.toggle('active', i === current); });
     dots.forEach(function(d, i){ d.classList.toggle('active', i === current); });
     counterEl.textContent = (current + 1) + ' / ' + slides.length;
-    titleEl.textContent = 'Figure ' + (current + 1) + ' \u00b7 ' + (slides[current].getAttribute('data-title') || '');
+    titleEl.textContent = 'Fig. ' + (current + 1) + ' \u00b7 ' + (slides[current].getAttribute('data-title') || '');
   }
 
   function goTo(i){
@@ -1498,39 +1515,38 @@
 </div>
 <!-- =================== END DIAGRAMS CAROUSEL =================== -->
     <div class="body-copy" style="margin-top:0;">
-      <p>In Figure 1, the stack reads bottom-up as "who talks with what"</p>
+      <p>In Fig. 1, the stack reads bottom-up as "who talks with what"</p>
       <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
-        <li><strong>The hardware</strong> exposes VT-x/AMD-V and EPT, discussed earlier, the CPU features that make guest-mode execution and 
-          hardware-enforced memory isolation possible</li>
-        <li><strong>KVM (Kernel-based Virtual Machine)</strong> turns those raw CPU features into a usable interface (i.e., <code>/dev/kvm</code>): create a VM, create vCPUs, map guest 
+        <li><strong>The hardware</strong> exposes VT-x/AMD-V and EPT, discussed earlier, the CPU features that make guest mode execution and 
+          memory isolation enforced by the hardware possible</li>
+        <li><strong>KVM (Kernel-based Virtual Machine)</strong> turns those raw CPU features into a usable interface, exposed to userspace as the 
+          special device file <code>/dev/kvm</code>: create a VM, create vCPUs, map guest 
           memory.</li>
-        <li><strong>The VMM (Virtual Machine Monitor)</strong> such as QEMU (and later will see for microVM Firecracker<a class="ref-link" href="#ref-2">[2]</a>, Cloud 
-          Hypervisor, etc.) is a userspace process that calls into that <code>/dev/kvm</code> interface via <code>ioctls</code> to create the VM, allocate its 
-          vCPUs (virtual CPUs) and hand over a region of its own memory to serve as the guest's RAM. It also performs the device emulation KVM does not handle 
-          itself.</li>
+        <li><strong>The VMM (Virtual Machine Monitor)</strong> such as QEMU<a class="ref-link" href="#ref-1">[1]</a> (and later will see for microVM Firecracker<a class="ref-link" href="#ref-2">[2]</a>, Cloud 
+          Hypervisor<a class="ref-link" href="#ref-3">[3]</a>, etc.) is a userspace process that calls into that <code>/dev/kvm</code> interface via <code>ioctls</code> to create the VM, allocate its 
+          vCPUs (virtual CPUs) and hand over a region of its own memory to serve as the guest's RAM. It also performs the device emulation.</li>
         <li><strong>The guest VMs</strong> are vCPU threads inside the VMM process. Each of those threads spends most of its time executing guest 
-          instructions directly on the CPU in guest mode. It only comes back up through KVM to the VMM when something needs emulating (VM exit), 
-          then goes back (VM entry) to resume (refer to Figure 2).</li>
+          instructions directly on the CPU in guest mode. It only comes back up through KVM to the VMM on a VM exit, 
+          then goes back (VM entry) to resume (refer to Fig. 2).</li>
       </ul>
 
       <div class="dig-deeper" style="margin-top:20px; margin-bottom:15px;">
-        <button class="dig-toggle" id="digToggleVM"><span class="dig-icon">i</span>Dig deeper<span class="chev">›</span></button>
+        <button class="dig-toggle" id="digToggleVM"><span class="dig-icon">i</span>Further detail<span class="chev">›</span></button>
         <div class="dig-content" id="digContentVM">
-          <p>Hardware features like Intel VT-x or AMD-V cannot be used directly by programs in the userspace. Operations such as:</p>
+          <p>Hardware features like Intel VT-x or AMD-V cannot be used directly by programs in the userspace. Operations such as the following 
+            involve low-level and sensitive setup that needs to be managed by the kernel:</p>
           <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
             <li>setting up EPT/NPT that translate guest physical addresses to host physical addresses and enforce the isolation boundary.</li>
             <li>managing the VM entry/exit transitions that involve the CPU switching into and out of guest mode and saving and restoring the state each time.</li>
           </ul>
           <p>
-            involve low-level and sensitive setup that needs to be managed by the kernel. They cannot be left to a userspace process to 
-            control them. The KVM module, in the kernel, packages these VT-x or AMD-V operations into a small set of defined commands, exposed 
+            The KVM module, in the kernel, packages these VT-x or AMD-V operations into a small set of defined commands, exposed 
             through the special device file <code>/dev/kvm</code>. The VMM (QEMU, Firecracker, Cloud Hypervisor, or whichever userspace process is managing 
             that VM) opens <code>/dev/kvm</code> and issues a sequence of <code>ioctl()</code> calls* to create a VM, create its vCPUs, and map a region of its own 
             (i.e., VMM) memory to serve as the guest's physical RAM. That translation, from raw CPU virtualization features to a  
-            straightforward requests any userspace program can issue, is what makes <code>/dev/kvm</code> a usable interface rather than just exposed 
-            hardware.
+            straightforward requests any userspace program can issue, is what makes <code>/dev/kvm</code> a usable interface.
           </p>
-          <p>* <code>ioctl()</code> calls are a standard Linux mechanism for sending commands to a device in the kernel.</p>
+          <p>* <code>ioctl()</code> calls are a standard Linux mechanism for sending commands to a device in the kernel<a class="ref-link" href="#ref-4">[4]</a>.</p>
         </div>
       </div>
       <div class="body-copy" style="margin-top:0;">
@@ -1539,20 +1555,20 @@
         <p>Because the guest OS expects to find a real PC underneath it, a conventional VMM emulates the complete legacy environment: BIOS, 
           UEFI firmware, chipset, PCI bus, VGA adapter, keyboard controller, and USB controllers. Every time the guest touches one of these 
           emulated devices, that access traps out as a VM exit, which the VMM then resolves by emulating the behavior the real hardware would 
-          have shown. Consequently, the guest boots the same way as a physical computer: the firmware runs, conducts a power-on self-test, 
+          have shown. Because of this full emulation, the guest boots the same way as a physical computer: the firmware runs, conducts a power-on self-test, 
           transfers control to a bootloader (such as GRUB), which then loads the kernel that initializes every one of those emulated devices 
           through its driver. This entire process highlights why a conventional VM may take several seconds to boot. A microVM does away with almost 
-          all of this: no firmware, no chipset, no PCI bus, no VGA, no USB stack,etc., to emulate.
+          all of this: no firmware, no chipset, no PCI bus, no USB stack,etc., to emulate.
         </p>
-        <p>Something to keep in mind, though: traditional VMMs do not emulate all devices in this "slow" way. For devices that experience high traffic 
-          (e.g., network card or disk) it uses <b>virtio</b> which is a paravirtualized interface that allows the guest to run a driver that knows it is actually communicating 
+        <p>Something to keep in mind: conventional VMMs do not emulate all devices in this "slow" way. For devices that experience high traffic 
+          (e.g., network card or disk) it uses <b>virtio</b><a class="ref-link" href="#ref-5">[5]</a> which is a paravirtualized interface that allows the guest to run a driver that knows it is actually communicating 
           with the VMM rather than through registers designed to mimic hardware. Therefore a typical VM device model is a mix between legacy full emulation 
           for rarely invoked hardware or critical operations, and virtio is used for whatever needs to move data fast. This mix matter for later: <b>a microVM virtualization does not invent 
           virtio, it just discards the legacy emulation and trims the remaining virtio side down to the bare minimum needed to boot and run.</b>
         </p>
       </div>
       <div class="dig-deeper" style="margin-top:20px; margin-bottom:15px;">
-        <button class="dig-toggle" id="digToggleVM2"><span class="dig-icon">i</span>Dig deeper<span class="chev">›</span></button>
+        <button class="dig-toggle" id="digToggleVM2"><span class="dig-icon">i</span>Further detail<span class="chev">›</span></button>
         <div class="dig-content" id="digContentVM2">
           <p>To have a sense of scale: QEMU <a class="ref-link" href="#ref-1">[1]</a>, the most widely used general-purpose VMM, is 
             well over a million lines of code. This is what a purpose-built microVM VMM like Firecracker avoids. Firecracker's entire 
@@ -1561,13 +1577,13 @@
       </div>
     </div>
 
-    <div class="sub-heading">How do containers actually work?</div>
+    <div class="sub-heading">How do containers work?</div>
       <div class="body-copy" style="margin-top:0;">
       <p>The mechanism of containers is completely different from that of VMs. Containers do not rely on hardware virtualization, 
-        instead they are regular processes running under the <b>same kernel</b> as the host (depicted in Figure 4 below), but made to seem isolated using kernel features:
+        instead they are regular processes running under the <b>same kernel</b> as the host (depicted in Fig. 4 below), but made to seem isolated using kernel features:
 
       <div class="crsl-header" style="margin-bottom:8px;">
-        <span class="crsl-title">Figure 4 &middot; Container isolation: namespaces, cgroups and security mechanisms</span>
+        <span class="crsl-title">Fig. 4 &middot; Container isolation: namespaces, cgroups and security mechanisms</span>
       </div>
       <!-- ===================================================================
            CONTAINER ISOLATION ANIMATION, pasted in as-is (class names
@@ -1667,7 +1683,7 @@
 
       <defs>
         <marker id="ct-arrow-ink" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
-          <path d="M0,0 L7,3.5 L0,7 Z" fill="#1F2328"/>
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="var(--ink)"/>
         </marker>
       </defs>
     </svg>
@@ -1715,7 +1731,7 @@
 
   .ct-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:13px; fill:var(--ink); }
   .ct-label-strong{ font-weight:600; }
-  .ct-label-small{ font-size:10.5px; fill:rgba(31,35,40,0.6); }
+  .ct-label-small{ font-size:10.5px; fill:var(--ink); fill-opacity:0.6; }
   .ct-label-red{ fill:var(--red); }
   .ct-invert{ fill:var(--paper); }
   .ct-op-text{ font-size:11px; fill:var(--red); font-weight:600; opacity:0; transition:opacity .3s ease; }
@@ -1909,20 +1925,21 @@
 
       </div>
       <!-- =================== END CONTAINER ISOLATION ANIMATION =================== -->
+      <p>Several Linux kernel mechanisms work together to produce this appearance of isolation, without any hardware virtualization involved:</p>
       <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
         <li style="margin-bottom:12px;"><strong>Namespaces</strong> give a process its own private view of a particular system 
           resource (e.g., network, filesystem, etc.), despite it executing under the same kernel as every other process on the host. 
           A PID (Process ID) namespace, for instance, confines a process to its own process hierarchy, so that it sees only itself and its 
-          descendants while the host's other processes remain hidden; a network namespace likewise gives it its own interfaces, addresses and 
-          routing rules; and a mount namespace presents it with its own filesystem view, distinct from the host's actual 
-          filesystem <a class="ref-link" href="#ref-3">[3]</a>.
+          descendants while the host's other processes remain hidden. A network namespace likewise gives it its own interfaces, addresses and 
+          routing rules. A mount namespace presents it with its own filesystem view, distinct from the host's actual 
+          filesystem <a class="ref-link" href="#ref-6">[6]</a>.
         </li> 
         <li style="margin-bottom:12px;"><strong>cgroups (control groups)</strong> impose quantitative limits on the resources (CPU time, memory, I/O bandwidth) available 
-          to a process or group of processes <a class="ref-link" href="#ref-4">[4]</a>, which is what prevents any single container from monopolizing the host.
+          to a process or group of processes <a class="ref-link" href="#ref-7">[7]</a>, which is what prevents any single container from monopolizing the host.
         </li>
         <li><strong>Security mechanisms</strong> add further constraints beyond namespaces and cgroups. <b>Capabilities</b> break the 
           "all-or-nothing" root privilege into smaller, individually grantable permissions, while <b>seccomp filters</b> restrict which system 
-          calls a process is allowed to invoke from the kernel at all <a class="ref-link" href="#ref-5">[5]</a>. Finally, <b>MAC (Mandatory Access Control)</b> tools such as AppArmor or SELinux 
+          calls a process is allowed to invoke from the kernel <a class="ref-link" href="#ref-8">[8]</a>. Finally, <b>MAC (Mandatory Access Control)</b> tools such as AppArmor or SELinux 
           enforce policies, defined by the administrator, that determine which interactions a process may have with the 
           resources it sees through its namespaces.
         </li>
@@ -1930,10 +1947,12 @@
 
 
       <p>Because there is no firmware, device emulation, or separate kernel to boot, starting a container translates to just starting a process which takes milliseconds. 
-        The memory overhead is whatever the application itself needs, in addition to a thin runtime.</p>
+        Unlike a VM, there is no guest kernel or emulated firmware to load into memory before anything else can run. A container's memory footprint is 
+        simply whatever the application itself allocates, plus a thin runtime layer such as a small init process, rather than the tens to hundreds of 
+        megabytes a guest OS typically needs before the application inside it even starts.</p>
 
-      <p>This is because container isolation depends entirely on one shared kernel enforcing it correctly. A container receives the same hardware 
-        enforced memory protection that any process receives, namely its own address space via the CPU's page tables, but this is true of every process 
+      <p>Container isolation depends entirely on one shared kernel enforcing it correctly. A container receives the same hardware 
+        enforced memory protection that any process receives, namely its own address space via the CPU's page tables, but this is true for every process 
         on the machine, whether containerized or not, and therefore does not by itself distinguish one tenant's container from another's. The isolation 
         between containers, provided by namespaces, cgroups, capabilities, and seccomp, is instead software policy enforced by that single shared 
         kernel. A virtual machine adds something a container does not have: a second, independent hardware check, provided by EPT or NPT, that operates 
@@ -1941,21 +1960,22 @@
         host kernel underlying a set of containers contains a bug in its namespace or system call handling code, the mechanism enforcing the isolation 
         boundary is itself compromised, with no further layer to fall back on.</p>
 
-      <div class="pull-quote">A virtual machine adds a second, independent hardware check beneath the guest's own kernel. A container has no equivalent second layer beneath the one kernel it shares with everyone else.</div>
+      <div class="pull-quote">A virtual machine has a second, independent hardware check beneath the guest's own kernel. A container has no equivalent second layer beneath the one kernel it shares with everyone else.</div>
     </div>
 
   <section class="tracked" id="sec-deepdive">
   <div class="section-num">3. Why microVMs appeared?</div>
   <div class="body-copy" style="margin-top:0;">
-    <p>Cloud providers faced a very specific issue. For them to provide services such as FaaS (Functions-as-a-Service), they needed to run code from 
-      thousands of different customers, packed densely onto the same physical servers, and with new instances spinning up and down constantly, often 
-      for a few hundred milliseconds of execution <a class="ref-link" href="#ref-1">[1]</a>. A concrete example of FaaS could be a small function that runs whenever another system sends it a 
+    <p>That isolation gap between VMs and containers is not just a theoretical distinction. It became a real business constraint for one particular 
+      kind of workload. Cloud providers faced a very specific issue. For them to provide services such as FaaS (Functions-as-a-Service), they needed to run code from 
+      thousands of different customers, packed densely onto the same physical servers, and with new instances spinning up and down constantly (often 
+      for a few hundred milliseconds of execution) <a class="ref-link" href="#ref-1">[1]</a>. A concrete example of FaaS could be a small function that runs whenever another system sends it a 
       webhook (i.e., a notification that one system sends automatically to another over the web the instant some event happens, rather than the second 
-      system having to repeatedly check whether anything has occurred) For example, a payment provider might send a webhook to a customer's function 
-      the moment a payment succeeds, carrying the details of that transaction, so the function can react immediately (e.g., updating an order's status) 
+      system having to repeatedly check whether anything has occurred). For example, a payment provider might send a webhook to a customer's function 
+      the moment a payment succeeds, carrying the details of that transaction, so the function can react immediately (e.g., updating an order's status). 
       A Cloud provider runs this function only when such a notification is received. The function runs for a small period of time, e.g., ten to hundreds 
       of milliseconds, then the Cloud provider terminates its instance. At any given moment, thousands of these short-lived functions, belonging to 
-      different customers, are being triggered and terminated in this same way, and all of them are sharing the same infrastructure. Figure 5 illustrates
+      different customers, are being triggered and terminated in this same way, and all of them are sharing the same infrastructure. Fig. 5 illustrates
       this density and churn.</p>
 
     <!-- ===================================================================
@@ -1965,7 +1985,7 @@
     <div class="diagram-wrap">
 
       <div class="crsl-header" style="margin-bottom:8px;">
-        <span class="crsl-title">Figure 5 &middot; FaaS density and churn: many short-lived functions sharing the same hardware</span>
+        <span class="crsl-title">Fig. 5 &middot; FaaS density and churn: many short-lived functions sharing the same hardware</span>
       </div>
 
 <div class="faas-widget" id="faasWidget">
@@ -2053,14 +2073,14 @@
 
   .faas-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:13px; fill:var(--ink); }
   .faas-label-strong{ font-weight:600; }
-  .faas-label-small{ font-size:10.5px; fill:rgba(31,35,40,0.6); }
+  .faas-label-small{ font-size:10.5px; fill:var(--ink); fill-opacity:0.6; }
   .faas-label-red{ fill:var(--red); }
   .faas-invert{ fill:var(--paper); font-weight:600; }
 
   .faas-line-red{ stroke:var(--red); stroke-width:2; fill:none; }
 
   .faas-cell-bg{ fill:var(--white); stroke:var(--ink); stroke-width:1.2; }
-  .faas-cell-text{ font-family:'Segoe UI', Arial, sans-serif; font-size:10px; fill:rgba(31,35,40,0.7); }
+  .faas-cell-text{ font-family:'Segoe UI', Arial, sans-serif; font-size:10px; fill:var(--ink); fill-opacity:0.7; }
 
   .faas-controls{ display:flex; gap:10px; margin-top:18px; }
   .faas-btn{
@@ -2205,9 +2225,15 @@
     <p>This made it hard to satisfy two conflicting requirements:</p>
 
     <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
-        <li style="margin-bottom:12px;"><strong>Isolation:</strong> The function of customer A must never be able to read the memory of customer B's 
-          function, data, or affect its execution, even if customer function A is malicious. In this case, containers are considered insufficiently 
-          isolated for this multi-tenancy, precisely because of the shared-kernel risk described above.</li> 
+        <li style="margin-bottom:12px;"><strong>Isolation:</strong> The function of customer A must never be able to read the memory or data of customer B's 
+          function, or affect its execution, even if customer function A is malicious. In this case, containers are considered insufficiently 
+          isolated for this multi-tenancy, precisely because of the shared-kernel risk described above. A related, more recent scenario is an AI 
+          agent that can execute arbitrary, model-generated code or shell commands on a user's behalf. If that execution is not isolated, the agent 
+          has the same reach as any other process on the host: it can read, modify, or delete anything the host process could touch, install 
+          software, or make outbound network connections, regardless of whether the model that generated those actions was manipulated, buggy, or 
+          simply mistaken. Running that execution inside a microVM confines it to its own kernel and its own hardware-enforced memory boundary, so 
+          a compromised or misbehaving agent cannot reach beyond the microVM it was given. This is a significant reason multiple AI infrastructure 
+          providers now run agent code execution this way.</li> 
         <li><strong>Speed and density:</strong> a traditional VM per function invocation will be too slow to boot (it can take seconds when the 
           whole function invocation might last milliseconds) and too heavy in memory (a full guest OS as well as a heavyweight VMM per instance) 
           to run at the density and pace the business required.</li>
@@ -2217,33 +2243,33 @@
     </p>
 
     <p>AWS was not alone in facing this trade-off. Separate motivation had already been building in the container world itself: projects like 
-      Intel's Clear Containers <a class="ref-link" href="#ref-6">[6]</a> and Hyper.sh's runV <a class="ref-link" href="#ref-7">[7]</a> had spent the 
+      Intel's Clear Containers <a class="ref-link" href="#ref-9">[9]</a> and Hyper.sh's runV <a class="ref-link" href="#ref-10">[10]</a> had spent the 
       preceding years experimenting with running each container inside a lightweight VM instead of a shared-kernel namespace, to get isolation closer 
       to a VM's while keeping close to a container's efficiency. Those two projects merged in December 2017 to form Kata Containers 
-      <a class="ref-link" href="#ref-8">[8]</a> <a class="ref-link" href="#ref-9">[9]</a>, about a year before Firecracker was open sourced.</p>
+      <a class="ref-link" href="#ref-11">[11]</a> <a class="ref-link" href="#ref-12">[12]</a>, about a year before Firecracker was open sourced.</p>
   </div>
 
   <div class="dig-deeper" style="margin-top:16px;">
-    <button class="dig-toggle" id="digToggle"><span class="dig-icon">i</span>Dig deeper<span class="chev">›</span></button>
+    <button class="dig-toggle" id="digToggle"><span class="dig-icon">i</span>Further detail<span class="chev">›</span></button>
     <div class="dig-content" id="digContent">
       <p>Kata Containers is not a virtualization technology, it is a container runtime, the same category of software as <code>runc</code>, and in fact a 
         replacement for it. It implements the OCI (Open Container Initiative) runtime interface, so Docker, containerd, Kubernetes, etc., can call it 
         exactly the same way they would call <code>runc</code>, without being aware of the difference. Its job is to take the container image, decides how to run 
         it, manages its lifecycle, and reports back through the same APIs a real container would use.</p>
-      <p>Instead of using namespaces and cgroups like <code>runc</code> does, Kata Containers runs each container inside an actual VM and it needs a VMM to do that. 
-        That VMM is pluggable, this means that Kata can be configured to use, QEMU (as a full, general-purpose VMM) or Cloud Hypervisor/Firecracker 
-        (microVM + light VMM). Hence, Kata Containers can use microVMs, but does not have to. Whether a given Kata deployment is using a microVM depends 
-        entirely on which VMM backend it is been configured with. Kata itself is agnostic to that choice. What Kata always provides, regardless of 
-        backend, is the layer that makes whatever VM is running underneath look and behave like an ordinary container to Kubernetes: injecting the 
+      <p>Instead of using namespaces and cgroups, Kata Containers runs each container inside an actual VM, which requires a VMM. That VMM is pluggable: 
+        Kata can be configured to use QEMU (a full, general-purpose VMM), or Cloud Hypervisor and Firecracker (a microVM VMM). This makes Kata Containers 
+        agnostic to whether a microVM is actually running underneath any given deployment. That is determined entirely by which VMM backend it is 
+        configured with. What Kata always provides, regardless of backend, is the layer that makes whatever VM is running underneath look and behave 
+        like an ordinary container to Kubernetes: injecting the 
         container image into the VM, running a small in-guest agent that receives commands the way <code>runc</code> normally would on the host, and wiring up 
         networking so the container looks completely normal from the outside.</p>
-      <p>In summary, Kata Containers is the integration layer that lets that mechanism sit underneath an unmodified container ecosystem.</p>
+      <p>In summary, Kata Containers is the integration layer that lets VM-based container isolation sit underneath an unmodified container ecosystem.</p>
     </div>
   </div>
   </section>
 
   <section class="tracked" id="sec-reflect">
-  <div class="section-num">4. What is a MicroVM and how it works</div>
+  <div class="section-num">4. What is a MicroVM and how it works?</div>
   <div class="body-copy" style="margin-top:0;">
     <p>At its core a microVM is a VM, it uses KVM, real vCPUs, and EPT for hardware memory isolation, exactly as described in Section 2. What differs 
       is the VMM. Instead of emulating a full generic PC, a microVM VMM implements only a few virtual devices actually needed, and skips the legacy PC 
@@ -2255,7 +2281,7 @@
           <li>a virtio-vsock for host and guest communication</li>
           <li>a bare serial console for logs.</li>
        </ul>
-      <p>This is very efficient since there is no need to mimic a specific real chip hardware registers. In fact, the guest virtio driver 
+      <p>This is very efficient since there is no need to emulate a specific real chip's hardware registers. In fact, the guest virtio driver 
         communicates with the VMM through shared memory ring buffers called virtqueues. This means that the VMM does not have to reimplement, 
         for instance, an Intel e1000 NIC register behavior, rather it just have to service a queue of requests. Fewer emulated registers = fewer 
         possible VM exits + less code + smaller attack surface. The less code an attacker can target through a VM exit means fewer opportunities 
@@ -2265,18 +2291,35 @@
         instead loads the guest kernel image directly into the guest memory itself, before the vCPU even starts, and sets the vCPU's initial 
         instruction pointer straight to the kernel's entry point (following a documented boot protocol, e.g., the Linux kernel boot protocol). 
         There is no BIOS POST, no bootloader reading from a virtual disk. This alone removes most of the seconds that a traditional VM spends before 
-        it is useful. MicroVMs can reach guest-kernel-running state in roughly 150ms <a class="ref-link" href="#ref-2">[2]</a> (see Figure 5 and Section 5.4 of [2]).</p>
+        it is useful. MicroVMs can reach guest-kernel-running state in roughly 150ms <a class="ref-link" href="#ref-2">[2]</a> (see Fig. 5 and Section 5.4 of that reference).</p>
         <p>The guest kernel itself is usually also trimmed for a specific purpose: a minimal config with unnecessary drivers, filesystems, etc., paired with 
           a small, often statically-linked root filesystem. This reduces both boot time further and the amount of code running inside the guest that could 
           itself contain vulnerabilities.</p>
       <div class="sub-heading">The mechanics of virtualizing each resource</div>
       <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
-          <li><strong>CPU: </strong>the VMM asks KVM to create one or more vCPUs. Each vCPU is a host thread that enters guest mode (called "VMX non-root operation" on Intel, "guest mode" on AMD) and executes the 
+          <li><strong>CPU: </strong>the VMM asks KVM to create one or more vCPUs. Each vCPU is a host thread that enters guest mode and executes the 
             guest's actual instructions directly on the physical core. It continues executing at native speed until something happens that the CPU 
             cannot handle by itself (a privileged instruction, an emulated-device access, etc.), which causes a VM exit back into the VMM/KVM to 
-            handle the event, followed by a VM entry to resume the guest <a class="ref-link" href="#ref-22">[22]</a>. Because a microVM has so few emulated devices, VM exits happen far 
-            less often than in a fully-emulated VM, which is a major reason microVMs also have lower steady-state CPU overhead. Figure 6 contrasts this with full
-            hardware emulation, where each access must trap into the VMM individually.
+            handle the event, followed by a VM entry to resume the guest <a class="ref-link" href="#ref-13">[13]</a>. Because a microVM has so few emulated devices, VM exits happen far 
+            less often than in a fully-emulated VM, which is a major reason microVMs also have lower steady-state CPU overhead (Fig. 6, below, 
+            contrasts this with full hardware emulation).
+          </li> 
+          <li><strong>Memory: </strong>the VMM allocates (<code>mmap</code>) a region of its own address space to serve as the guest's entire physical RAM, 
+            and registers that region with KVM (via a call like <code>KVM_SET_USER_MEMORY_REGION</code>) <a class="ref-link" href="#ref-14">[14]</a>. 
+            From that point, the CPU's EPT hardware sits underneath the guest's own page tables. The guest translates guest virtual addresses to 
+            guest physical addresses itself, exactly as it would on bare metal. EPT performs the next step, translating those guest physical addresses 
+            into host physical addresses. This is the actual isolation mechanism: it is enforced by the CPU's memory management hardware, not by a software check 
+            that a clever attacker might bypass. Most microVM VMMs require you to specify the memory size up front at creation time, though some 
+            support later resizing via memory ballooning</li>
+          <li><strong>I/O (network/disk): </strong>handled entirely through virtio, the same mechanism a traditional VM uses for its
+            network and disk, the difference being that in a microVM it is the <b>only</b> option, with no legacy emulation alongside it.
+            For networking, the VMM connects a virtio-net device inside the guest to a TAP interface on the host, a virtual network interface 
+            that behaves like the guest's own network cable plugged into the host. The guest and the VMM exchange packets through a small shared memory queue instead of through 
+            emulated hardware registers, and a lightweight notification tells the VMM when new data is waiting, instead of the VMM having to 
+            check constantly. Storage works the same way: the guest describes what it wants to read or write, and the VMM turns that into an 
+            ordinary read or write against a file or block device on the host. In both cases, the VMM's role reduces to translating these 
+            queue requests into real host operations. It never has to imitate a specific NIC or disk controller chip.</li>
+       </ul>
 
             <!-- ===================================================================
                  VIRTIO VS. EMULATION ANIMATION, pasted in as-is (class names
@@ -2285,7 +2328,7 @@
             <div class="diagram-wrap" style="margin-top:20px;">
 
               <div class="crsl-header" style="margin-bottom:8px;">
-                <span class="crsl-title">Figure 6 &middot; Full emulation versus virtio: fewer, batched traps into the VMM</span>
+                <span class="crsl-title">Fig. 6 &middot; Full emulation versus virtio: fewer, batched traps into the VMM</span>
               </div>
 
 <div class="vt-widget" id="vtWidget">
@@ -2357,7 +2400,7 @@
 
       <defs>
         <marker id="vt-arrow-ink" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
-          <path d="M0,0 L7,3.5 L0,7 Z" fill="#1F2328"/>
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="var(--ink)"/>
         </marker>
         <marker id="vt-arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="#B90E0A"/>
@@ -2405,7 +2448,7 @@
 
   .vt-label{ font-family:'Segoe UI', Arial, sans-serif; font-size:13px; fill:var(--ink); }
   .vt-label-strong{ font-weight:600; }
-  .vt-label-small{ font-size:11px; fill:rgba(31,35,40,0.6); transition:fill .25s; }
+  .vt-label-small{ font-size:11px; fill:var(--ink); fill-opacity:0.6; transition:fill .25s; }
   .vt-label-small.vt-inverted{ fill:var(--paper); }
   .vt-label-red{ fill:var(--red); }
   .vt-status-text{ font-size:15.5px; }
@@ -2613,41 +2656,30 @@
             </div>
             <!-- =================== END VIRTIO VS. EMULATION ANIMATION =================== -->
 
-          </li> 
-          <li><strong>Memory: </strong>the VMM allocates (<code>mmap</code>) a region of its own address space to serve as the guest's entire physical RAM, 
-            and registers that region with KVM (via a call like <code>KVM_SET_USER_MEMORY_REGION</code>) <a class="ref-link" href="#ref-23">[23]</a>. 
-            From that point, the CPU's EPT hardware sits underneath the guest's own page tables. The guest translates guest virtual addresses to 
-            guest physical addresses itself, exactly as it would on bare metal. EPT performs the next step, translating those guest physical addresses 
-            into host physical addresses. This is the actual isolation mechanism: it is enforced by the CPU's memory management hardware, not by a software check 
-            that a clever attacker might bypass. Most microVM VMMs require you to specify the memory size up front at creation time, though some 
-            support later resizing via memory ballooning</li>
-          <li><strong>I/O (network/disk): </strong>handled entirely through virtio, the same mechanism a traditional VM uses for its
-            network and disk, the difference being that in a microVM it is the <em>only</em> option, with no legacy emulation alongside it.
-            For networking, the VMM connects a virtio-net device inside the guest to a TAP interface on the host. When the guest sends a
-            packet, its virtio driver places a descriptor in a virtqueue, a ring buffer residing in the guest's memory, which, being a
-            region of the VMM's own address space, both sides can read and write directly, and then signals the VMM through a lightweight KVM 
-            mechanism called an <code>ioeventfd</code>, which resolves the notification inside the kernel and avoids a synchronous round trip into 
-            the userspace VMM for every packet. That notification is
-            necessary because a guest writing to its own memory traps nothing at all; without it the VMM would have to poll the queue
-            continuously. The VMM reads the descriptor, forwards the bytes to the host's network stack through the TAP device, and signals
-            completion back via an <code>irqfd</code> so the guest's driver knows the packet was consumed <a class="ref-link" href="#ref-11">[11]</a><a class="ref-link" href="#ref-10">[10]</a>. Storage works
-            identically with virtio-block: a descriptor specifies an operation and a block offset (for example, "read 4096 bytes starting
-            at block 12345 into this location"), and the VMM translates it into an ordinary read or write at the corresponding byte offset
-            in a backing file or block device on the host. In both cases the VMM's role reduces to translating virtqueue requests into real
-            host operations; it never has to imitate a specific NIC or disk controller chip.</li>
-       </ul>
+      <div class="dig-deeper" style="margin-top:16px;">
+        <button class="dig-toggle" id="digToggleIO"><span class="dig-icon">i</span>Further detail<span class="chev">›</span></button>
+        <div class="dig-content" id="digContentIO">
+          <p>The notification mechanism mentioned above has a name. When the guest places a new descriptor in the virtqueue, it signals the 
+            VMM through a lightweight KVM mechanism called an <code>ioeventfd</code> <a class="ref-link" href="#ref-14">[14]</a>, which resolves the notification inside the kernel and 
+            avoids a synchronous round trip into the userspace VMM for every packet. This is necessary because a guest simply writing to its 
+            own memory does not trigger anything on its own. Without an explicit signal, the VMM would have to poll the queue continuously to 
+            notice new work. Once the VMM has processed the request, for example forwarding a network packet through the TAP device, it 
+            signals completion back to the guest via a matching mechanism called an <code>irqfd</code> <a class="ref-link" href="#ref-14">[14]</a>.</p>
+        </div>
+      </div>
   </div>
   </section>
 
   <section class="tracked" id="sec-vs">
   <div class="section-num">5. MicroVM vs. Traditional VM vs. Container</div>
   <div class="body-copy" style="margin-top:0;">
-    <p>With the mechanics of all three established, the differences can be set side by side. The essential thing to notice is that a
-      microVM shares its <em>isolation column</em> with the traditional VM and its <em>speed column</em> with the container; that
+    <p>With the mechanics of all three established, the differences can be set side by side, as shown in Table 1. The essential thing to notice is that a
+      microVM shares its <b>isolation column</b> with the traditional VM and its <b>speed column</b> with the container. That
       combination is the entire reason it exists.</p>
   </div>
 
   <div style="overflow-x:auto; margin:24px 0 0;">
+    <p style="font-size:13px; font-weight:600; color:var(--ink); margin:0 0 8px;">Table 1 &middot; MicroVM vs. traditional VM vs. container</p>
     <table style="width:100%; border-collapse:collapse; font-size:13.5px; line-height:1.6;">
       <thead>
         <tr>
@@ -2661,7 +2693,7 @@
         <tr>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Isolation mechanism</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Hardware (EPT/NPT + separate kernel)</td>
-          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Software (namespaces + cgroups, shared kernel)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Software (namespaces + cgroups)</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Hardware (EPT/NPT + separate kernel)</td>
         </tr>
         <tr>
@@ -2674,12 +2706,12 @@
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Device model</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Full emulated PC (BIOS, PCI, VGA, USB…)</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">None: just host syscalls</td>
-          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Minimal, a few virtio devices only</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Minimal: a few virtio devices only</td>
         </tr>
         <tr>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Boot path</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Firmware → bootloader → kernel</td>
-          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">None: fork/exec a process</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">None, the process just starts directly</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Kernel loaded directly by the VMM</td>
         </tr>
         <tr>
@@ -2696,12 +2728,12 @@
         </tr>
         <tr>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">VMM / runtime code size</td>
-          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Large (QEMU: over a million lines)</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Large (e.g., QEMU: over a million lines)</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Not applicable</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Small (tens of thousands of lines)</td>
         </tr>
         <tr>
-          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Blast radius if compromised</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Scope of impact if compromised</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Contained to that one VM</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Potentially the whole host</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Contained to that one microVM</td>
@@ -2716,85 +2748,111 @@
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule); font-weight:500;">Device passthrough (GPU, USB)</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Full support</td>
           <td style="padding:10px 12px; border-bottom:1px solid var(--rule);">Not applicable</td>
-          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Varies by VMM; none in Firecracker</td>
+          <td style="padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--red-soft);">Varies by VMM, none in Firecracker</td>
         </tr>
         <tr>
           <td style="padding:10px 12px; font-weight:500;">Typical use case</td>
           <td style="padding:10px 12px;">General servers, legacy apps, desktops</td>
           <td style="padding:10px 12px;">Microservices, app packaging</td>
-          <td style="padding:10px 12px; background:var(--red-soft);">Multi-tenant sandboxes, serverless</td>
+          <td style="padding:10px 12px; background:var(--red-soft);">Multi-tenant sandboxes, serverless, AI agent code execution</td>
         </tr>
       </tbody>
     </table>
   </div>
-  <p style="font-size:12px; color:var(--muted); margin:12px 0 0;">Sources: <a class="ref-link" href="#ref-10">[10]</a><a class="ref-link" href="#ref-1">[1]</a><a class="ref-link" href="#ref-3">[3]</a><a class="ref-link" href="#ref-4">[4]</a><a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-11">[11]</a></p>
+  <p style="font-size:12px; color:var(--muted); margin:12px 0 0;">Sources: <a class="ref-link" href="#ref-1">[1]</a><a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-5">[5]</a><a class="ref-link" href="#ref-6">[6]</a><a class="ref-link" href="#ref-7">[7]</a></p>
   </section>
 
   <section class="tracked" id="sec-benefits">
   <div class="section-num">6. Benefits and disadvantages of MicroVMs</div>
   <div class="body-copy" style="margin-top:0;">
-    <p><strong>Benefits.</strong></p>
-    <ul style="margin:0 0 24px; padding-left:20px; line-height:1.75;">
-      <li><strong>Hardware-enforced isolation between tenants</strong> without paying the full cost of a traditional VM. This is the core
-        value proposition: it is safe to run code you do not trust, belonging to customers who do not trust each other <a class="ref-link" href="#ref-2">[2]</a>.</li>
-      <li><strong>Fast startup</strong>, which makes workloads like serverless functions viable, where a cold start must complete in well
-        under a second <a class="ref-link" href="#ref-2">[2]</a>.</li>
-      <li><strong>Small attack surface.</strong> A minimal device model and a compact, often memory-safe VMM codebase leave fewer places
-        for exploitable defects to hide, and fewer VM exits for an attacker to abuse even where one exists <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-12">[12]</a>.</li>
-      <li><strong>Low overhead per instance</strong> relative to a full VM, permitting far higher density: many more isolated sandboxes on
-        the same physical host <a class="ref-link" href="#ref-2">[2]</a>.</li>
-      <li><strong>Per-tenant kernel flexibility.</strong> Because each microVM runs its own kernel, different tenants can run different
-        kernel versions or configurations side by side.</li>
-      <li><strong>Compatibility with existing ecosystems.</strong> Through projects such as Kata Containers, microVMs can serve as a
-        VM-isolated backend for standard container tooling, so the isolation upgrade does not require abandoning the container
-        workflow <a class="ref-link" href="#ref-9">[9]</a>.</li>
-    </ul>
+    <p>The tradeoffs below follow directly from the mechanism described in the previous sections. The benefits stem largely from the same 
+      hardware boundary and minimal device model already discussed. The limitations stem mostly from how young the microVM ecosystem still is 
+      relative to decades-old hypervisor platforms and the container ecosystem.</p>
 
-    <p><strong>Disadvantages and limitations.</strong></p>
-    <ul style="margin:0; padding-left:20px; line-height:1.75;">
-      <li><strong>Still heavier than a container.</strong> Each microVM needs its own kernel resident in memory and its own boot sequence,
-        however fast. A plain container remains lighter and quicker to start, being merely a host process.</li>
-      <li><strong>Limited device support.</strong> The minimal device model that makes microVMs fast and secure also constrains what they
-        can run. Firecracker has no PCI bus and therefore no GPU passthrough at all; Cloud Hypervisor does support VFIO passthrough,
-        so this is a per-VMM design decision rather than an inherent limit of the approach <a class="ref-link" href="#ref-13">[13]</a>.</li>
-      <li><strong>Limited live migration.</strong> Traditional hypervisors have long supported migrating a running VM between hosts with no
-        downtime. The earliest microVM VMMs lacked this entirely; Firecracker later added snapshot and restore, which is useful but not
-        equivalent to full live migration <a class="ref-link" href="#ref-12">[12]</a>.</li>
-      <li><strong>Substantial orchestration work.</strong> A VMM such as Firecracker is a building block, not a platform: there is no
-        scheduler, image registry, or networking control plane. Getting a microVM running is straightforward; running many thousands
+    <div class="sub-heading">Benefits</div>
+    <dl style="margin:0 0 24px;">
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Hardware-enforced isolation between tenants</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">without paying the full cost of a traditional VM. This is the core
+        value proposition: it is safe to run code you do not trust, belonging to customers who do not trust each other <a class="ref-link" href="#ref-2">[2]</a>.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Fast startup</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">which makes workloads like serverless functions viable, where a cold start must complete in well
+        under a second <a class="ref-link" href="#ref-2">[2]</a>.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Small attack surface</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">A minimal device model and a compact, often memory-safe VMM codebase leave fewer places
+        for exploitable defects to hide, and fewer VM exits for an attacker to abuse even where one exists <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-15">[15]</a>.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Low overhead per instance</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">relative to a full VM, permitting far higher density: many more isolated sandboxes on
+        the same physical host <a class="ref-link" href="#ref-2">[2]</a>.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Per-tenant kernel flexibility</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">Because each microVM runs its own kernel, different tenants can run different
+        kernel versions or configurations side by side.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Compatibility with existing ecosystems</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">Through projects such as Kata Containers, microVMs can serve as a
+        VM-isolated backend for standard container tooling, so the isolation upgrade does not require abandoning the container
+        workflow <a class="ref-link" href="#ref-12">[12]</a>.</dd>
+    </dl>
+
+    <div class="sub-heading">Disadvantages and limitations</div>
+    <dl style="margin:0;">
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Still heavier than a container</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">Each microVM needs its own kernel resident in memory and its own boot sequence,
+        however fast. A plain container remains lighter and quicker to start, being merely a host process.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Limited device support</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">The minimal device model that makes microVMs fast and secure also constrains what they
+        can run. Firecracker has no PCI bus and therefore no GPU passthrough at all. Cloud Hypervisor does support VFIO passthrough,
+        so this is a per-VMM design decision rather than an inherent limit of the approach <a class="ref-link" href="#ref-3">[3]</a>.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Limited live migration</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">Traditional hypervisors have long supported migrating a running VM between hosts with no
+        downtime. The earliest microVM VMMs lacked this entirely. Firecracker later added snapshot and restore, which is useful but not
+        equivalent to full live migration <a class="ref-link" href="#ref-15">[15]</a>.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Substantial orchestration work</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">A VMM such as Firecracker is a building block, not a platform: there is no
+        scheduler, image registry, or networking control plane. Getting a microVM running is straightforward. Running many thousands
         across a fleet, with per-tenant networking, placement, image distribution, and lifecycle management, is where the real
-        engineering lies <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-9">[9]</a>.</li>
-      <li><strong>Less mature tooling</strong> than decades-old hypervisor platforms or the container ecosystem, though this continues to
-        improve.</li>
-      <li><strong>Requires hardware virtualization.</strong> MicroVMs depend on CPU virtualization extensions being available and exposed
+        engineering lies <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-12">[12]</a>.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Less mature tooling</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">than decades-old hypervisor platforms or the container ecosystem, though this continues to
+        improve.</dd>
+
+      <dt style="font-weight:600; color:var(--ink); margin-top:16px;">Requires hardware virtualization</dt>
+      <dd style="margin:4px 0 0; color:var(--muted); line-height:1.75;">MicroVMs depend on CPU virtualization extensions being available and exposed
         to the host, which can be a problem in nested-virtualization environments, and ties implementations to particular architectures,
-        mainly x86_64 and aarch64 today <a class="ref-link" href="#ref-10">[10]</a><a class="ref-link" href="#ref-20">[20]</a><a class="ref-link" href="#ref-21">[21]</a>.</li>
-    </ul>
+        mainly x86_64 and aarch64 today <a class="ref-link" href="#ref-16">[16]</a><a class="ref-link" href="#ref-17">[17]</a><a class="ref-link" href="#ref-18">[18]</a>.</dd>
+    </dl>
   </div>
   </section>
 
   <section class="tracked" id="sec-solutions">
   <div class="section-num">7. Existing MicroVM Solutions</div>
   <div class="body-copy" style="margin-top:0;">
-    <p><strong>Firecracker</strong> (AWS, open source, Rust) is the project that popularized the term, built originally to power AWS Lambda
+    <p><strong>Firecracker</strong> (AWS) is the project that popularized the term, built originally to power AWS Lambda
       and Fargate. It combines a minimal device model, virtio for all data path I/O (plus a couple of small legacy devices for console output and 
       shutdown), direct kernel boot, a REST API over a Unix socket for control, and the
       jailer wrapper that confines each VMM instance with its own namespaces, cgroups, <code>chroot</code>, unprivileged user and seccomp
       filter. Later versions added snapshot and restore, allowing an already-booted microVM to be cloned rather than booted afresh
-      <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-12">[12]</a>.</p>
+      <a class="ref-link" href="#ref-2">[2]</a><a class="ref-link" href="#ref-15">[15]</a>.</p>
 
-    <p><strong>Cloud Hypervisor</strong> (originally Intel-led, now a broader community project, also Rust) shares building blocks with
+    <p><strong>Cloud Hypervisor</strong> (originally Intel-led, now a broader community project) shares building blocks with
       Firecracker through <strong>rust-vmm</strong>, a set of common Rust crates, including <code>kvm-ioctls</code>, <code>vm-memory</code>, and virtio
-      device implementations, reused across several VMM projects <a class="ref-link" href="#ref-14">[14]</a>. It occupies a similar niche but with a wider feature set:
+      device implementations, reused across several VMM projects <a class="ref-link" href="#ref-19">[19]</a>. It occupies a similar niche but with a wider feature set:
       VFIO (Virtual Function I/O) device passthrough, live migration, and support for confidential-computing hardware such as Intel TDX (Trust Domain Extensions)
       and AMD SEV (Secure Encrypted Virtualization). It is one of
-      the pluggable backends for Kata Containers <a class="ref-link" href="#ref-13">[13]</a>.</p>
+      the pluggable backends for Kata Containers <a class="ref-link" href="#ref-3">[3]</a>.</p>
 
-    <p><strong>Kata Containers</strong> (OpenInfra Foundation) is not a VMM but an OCI-compatible container <em>runtime</em>: a drop-in
+    <p><strong>Kata Containers</strong> (OpenInfra Foundation) is not a VMM but an OCI-compatible container <b>runtime</b>: a drop-in
       replacement for <code>runc</code> that runs each container or pod inside a real virtual machine while still speaking the APIs that
       containerd, CRI-O and Kubernetes expect. Its VMM is pluggable (QEMU, Cloud Hypervisor, or Firecracker), so a Kata deployment is only
-      using microVMs when configured with one of the latter two. It was born from the 2017 merger of Intel's Clear Containers <a class="ref-link" href="#ref-6">[6]</a> and
-      Hyper.sh's runV <a class="ref-link" href="#ref-7">[7]</a>, and remains the main route by which microVMs reach existing container ecosystems <a class="ref-link" href="#ref-9">[9]</a>.</p>
+      using microVMs when configured with one of the latter two. It was born from the 2017 merger of Intel's Clear Containers <a class="ref-link" href="#ref-9">[9]</a> and
+      Hyper.sh's runV <a class="ref-link" href="#ref-10">[10]</a>, and remains the main route by which microVMs reach existing container ecosystems <a class="ref-link" href="#ref-12">[12]</a>.</p>
 
     <p><strong>QEMU's <code>microvm</code> machine type</strong> offers a stripped-down profile (<code>-M microvm</code>) that drops most
       legacy PC emulation in favour of a minimal virtio-focused platform for faster boot. It is still QEMU underneath, however, so it does
@@ -2802,29 +2860,48 @@
 
     <p><strong>crosvm</strong> (Google, Rust) is the VMM behind ChromeOS and Android's Linux and Android VMs. It shares rust-vmm heritage
       with the projects above and pushes sandboxing furthest of any of them, running individual device backends in separate processes with
-      their own seccomp policies, so compromising one backend does not yield the whole VMM <a class="ref-link" href="#ref-15">[15]</a>.</p>
+      their own seccomp policies, so compromising one backend does not yield the whole VMM <a class="ref-link" href="#ref-20">[20]</a>.</p>
 
     <p><strong>libkrun</strong> (Red Hat) packages a VMM as a library rather than a standalone binary, letting a program be launched inside
       a lightweight KVM-isolated VM through a simple API call. It underlies <code>krunvm</code> and Podman's <code>krun</code> platform,
       and is notably used to give containers genuine Linux-kernel isolation when running on macOS, where it uses Apple's
-      Hypervisor.framework rather than KVM <a class="ref-link" href="#ref-16">[16]</a>.</p>
+      Hypervisor.framework rather than KVM <a class="ref-link" href="#ref-21">[21]</a>.</p>
 
     <p><strong>Hyperlight</strong> (Microsoft) is a newer and more specialized project aimed at sub-millisecond, extremely lightweight
       micro-guest sandboxes for small units of code such as WebAssembly modules, pushing the minimalism of the Firecracker approach further
-      still for a narrower use case <a class="ref-link" href="#ref-17">[17]</a>.</p>
+      still for a narrower use case <a class="ref-link" href="#ref-22">[22]</a>.</p>
 
-    <p><strong>gVisor</strong> (Google) is worth naming for contrast rather than inclusion. It is <em>not</em> a hardware-virtualized
+    <p><strong>gVisor</strong> (Google) is worth naming for contrast rather than inclusion. It is <b>not</b> a hardware-virtualized
       microVM: it is a userspace application kernel, called Sentry, that intercepts a container's system calls and reimplements much of the
       Linux syscall surface itself, interposing a software isolation layer without necessarily booting a separate guest kernel at all. It
       addresses the same problem, safer multi-tenant sandboxing, by a different mechanism, and is used in App Engine, Cloud Run and GKE
-      Sandbox <a class="ref-link" href="#ref-18">[18]</a>.</p>
+      Sandbox <a class="ref-link" href="#ref-23">[23]</a>.</p>
 
     <p>Finally, a related but distinct idea: <strong>unikernels</strong> such as IncludeOS, OSv and MirageOS. Where a microVM minimizes the
-      <em>VMM</em>, a unikernel minimizes the <em>guest</em>, compiling an application together with only the library-OS components it needs
-      into a single specialized kernel image with no general-purpose OS beneath it <a class="ref-link" href="#ref-19">[19]</a>. The two are complementary rather than competing;
-      a unikernel is sometimes run inside a microVM VMM such as Firecracker, combining both kinds of minimalism.</p>
+      <b>VMM</b>, a unikernel minimizes the <b>guest</b>, compiling an application together with only the library-OS components it needs
+      into a single specialized kernel image with no general-purpose OS beneath it <a class="ref-link" href="#ref-24">[24]</a>. The two are complementary rather than competing.
+      Because they minimize different layers, a unikernel could in principle run as the guest inside a microVM VMM such as Firecracker, 
+      combining both kinds of minimalism.</p>
   </div>
 
+  </section>
+
+  <section class="tracked" id="sec-conclusion">
+  <div class="section-num">8. Conclusion</div>
+  <div class="body-copy" style="margin-top:0;">
+    <p>A microVM is a virtual machine, in the full sense described in Section 2: its guest runs inside hardware-enforced guest mode, and 
+      its memory is bounded by EPT/NPT, the same isolation boundary a traditional VM has. What differs is everything constructed on top of 
+      that boundary. By replacing full hardware emulation with a minimal, virtio-only device model and booting the guest kernel directly, a 
+      microVM preserves the isolation guarantee that made VMs the safe choice for untrusted, multi-tenant code, while approaching the boot 
+      time and density that made containers practical at scale. This combination is exactly what Section 3 described cloud providers 
+      needing, and the one Section 5's table sets side by side.</p>
+    <p>This does not make microVMs a universal replacement for either technology. Section 6 identified where this combination still incurs 
+      a cost: reduced device support, a heavier footprint than a plain container, and an ecosystem that remains less mature than either of 
+      the technologies it sits between. The appropriate choice remains workload-specific, and Section 7's overview of Firecracker, Cloud 
+      Hypervisor, Kata Containers, and the rest exists precisely because no single implementation fits every case.</p>
+    <p>The next episode in this series moves from this theoretical grounding to an actual deployment: building the network a microVM runs 
+      on, and bringing two microVMs up and communicating with each other.</p>
+  </div>
   </section>
 
   <!-- ===================================================================
@@ -2833,39 +2910,59 @@
   =================================================================== -->
   <section class="tracked" id="references" style="margin-top:56px; padding-top:24px; border-top:1px solid var(--rule);">
     <h2 style="font-size:19px; font-weight:600; margin:0 0 6px; color:var(--ink);">References</h2>
-    <p style="font-size:12.5px; color:var(--muted); margin:0 0 18px;">Sources last verified: September 2026. Some of these projects move quickly (confidential-computing support, pluggable-backend lists, and similarly fast-changing details in particular); check the linked source directly for anything current.</p>
+    <p style="font-size:12.5px; color:var(--muted); margin:0 0 18px;">Sources last verified: September 2026. Some of these projects move quickly. Check the linked source directly for anything current.</p>
     <ol class="ref-list" style="list-style:none; margin:0; padding:0; font-size:13px; line-height:1.7; color:var(--muted);">
       <li id="ref-1" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[1] QEMU Project. QEMU Documentation. <a href="https://www.qemu.org/docs/master/" style="color:var(--red); text-decoration:none;">https://www.qemu.org/docs/master/</a></li>
       <li id="ref-2" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[2] Agache, A., Brooker, M., Iordache, A., Liguori, A., Neugebauer, R., Piwonka, P., Popa, D.M. "Firecracker: Lightweight Virtualization for Serverless Applications." 17th USENIX Symposium on Networked Systems Design and Implementation (NSDI '20), 2020. <a href="https://www.usenix.org/conference/nsdi20/presentation/agache" style="color:var(--red); text-decoration:none;">https://www.usenix.org/conference/nsdi20/presentation/agache</a></li>
-      <li id="ref-3" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[3] Linux man-pages. namespaces. <a href="https://man7.org/linux/man-pages/man7/namespaces.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/namespaces.7.html</a></li>
-      <li id="ref-4" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[4] Linux man-pages. cgroups. <a href="https://man7.org/linux/man-pages/man7/cgroups.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/cgroups.7.html</a></li>
-      <li id="ref-5" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[5] Linux man-pages. capabilities; Linux Kernel Documentation, Seccomp BPF. <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/capabilities.7.html</a></li>
-      <li id="ref-6" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[6] Intel. Clear Containers, part of the Clear Linux Project. (deprecated; project superseded by Kata Containers following the 2017 merger). <a href="https://github.com/clearcontainers" style="color:var(--red); text-decoration:none;">https://github.com/clearcontainers</a></li>
-      <li id="ref-7" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[7] Hyper.sh. runV. (public archive; Hyper.sh has since ceased operation). <a href="https://github.com/hyperhq/runv" style="color:var(--red); text-decoration:none;">https://github.com/hyperhq/runv</a></li>
-      <li id="ref-8" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[8] Kata Containers Project<a href="https://katacontainers.io/" style="color:var(--red); text-decoration:none;">https://katacontainers.io/</a></li>
-      <li id="ref-9" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[9] Kata Containers Documentation and Architecture, OpenInfra Foundation. <a href="https://github.com/kata-containers/kata-containers" style="color:var(--red); text-decoration:none;">https://github.com/kata-containers/kata-containers</a></li>
-      <li id="ref-10" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[10] Linux Kernel Documentation. Kernel Virtual Machine (KVM). <a href="https://www.kernel.org/doc/html/latest/virt/kvm/" style="color:var(--red); text-decoration:none;">https://www.kernel.org/doc/html/latest/virt/kvm/</a></li>
-      <li id="ref-11" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[11] OASIS. Virtual I/O Device (VIRTIO) Specification. <a href="https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html" style="color:var(--red); text-decoration:none;">https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html</a></li>
-      <li id="ref-12" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[12] Firecracker Project. Documentation, design and security model (including the jailer). <a href="https://firecracker-microvm.github.io/" style="color:var(--red); text-decoration:none;">https://firecracker-microvm.github.io/</a></li>
-      <li id="ref-13" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[13] Cloud Hypervisor Project. Cloud Hypervisor Documentation. <a href="https://www.cloudhypervisor.org/" style="color:var(--red); text-decoration:none;">https://www.cloudhypervisor.org/</a></li>
-      <li id="ref-14" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[14] rust-vmm Project. A set of Rust components for building VMMs. <a href="https://github.com/rust-vmm" style="color:var(--red); text-decoration:none;">https://github.com/rust-vmm</a></li>
-      <li id="ref-15" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[15] Google. crosvm: the Chrome OS Virtual Machine Monitor. <a href="https://chromium.googlesource.com/chromiumos/platform/crosvm/" style="color:var(--red); text-decoration:none;">https://chromium.googlesource.com/chromiumos/platform/crosvm/</a></li>
-      <li id="ref-16" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[16] containers Project. libkrun. <a href="https://github.com/containers/libkrun" style="color:var(--red); text-decoration:none;">https://github.com/containers/libkrun</a></li>
-      <li id="ref-17" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[17] Microsoft. Hyperlight. <a href="https://github.com/hyperlight-dev/hyperlight" style="color:var(--red); text-decoration:none;">https://github.com/hyperlight-dev/hyperlight</a></li>
-      <li id="ref-18" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[18] Google. gVisor Documentation: Architecture Guide. <a href="https://gvisor.dev/docs/" style="color:var(--red); text-decoration:none;">https://gvisor.dev/docs/</a></li>
-      <li id="ref-19" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[19] Madhavapeddy, A., Scott, D.J. "Unikernels: The Rise of the Virtual Library Operating System." Communications of the ACM, 2014. See also IncludeOS, OSv and MirageOS. <a href="https://unikernel.org/" style="color:var(--red); text-decoration:none;">https://unikernel.org/</a></li>
-      <li id="ref-20" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[20] Intel. Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3C: System Programming Guide (VMX and Extended Page Tables). <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" style="color:var(--red); text-decoration:none;">https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html</a></li>
-      <li id="ref-21" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[21] AMD. AMD64 Architecture Programmer's Manual, Volume 2: System Programming (Secure Virtual Machine). <a href="https://www.amd.com/en/support/tech-docs" style="color:var(--red); text-decoration:none;">https://www.amd.com/en/support/tech-docs</a></li>
-      <li id="ref-22" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[22] Improving the Performance of VM Workloads by Optimizing Polling Time. <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/improving-performance-vm-workloads-opt-poll-time.html" style="color:var(--red); text-decoration:none;">https://www.intel.com/content/www/us/en/developer/articles/technical/improving-performance-vm-workloads-opt-poll-time.html</a></li>
-      <li id="ref-23" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[23] The Definitive KVM (Kernel-based Virtual Machine) API Documentation. <a href="https://www.kernel.org/doc/html/latest/virt/kvm/api.html" style="color:var(--red); text-decoration:none;">https://www.kernel.org/doc/html/latest/virt/kvm/api.html</a></li>
+      <li id="ref-3" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[3] Cloud Hypervisor Project. Cloud Hypervisor Documentation. <a href="https://www.cloudhypervisor.org/" style="color:var(--red); text-decoration:none;">https://www.cloudhypervisor.org/</a></li>
+      <li id="ref-4" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[4] The Linux Kernel. ioctl-based device control interface. <a href="https://www.kernel.org/doc/html/latest/driver-api/ioctl.html" style="color:var(--red); text-decoration:none;">https://www.kernel.org/doc/html/latest/driver-api/ioctl.html</a></li>
+      <li id="ref-5" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[5] OASIS. Virtual I/O Device (VIRTIO) Specification. <a href="https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html" style="color:var(--red); text-decoration:none;">https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html</a></li>
+      <li id="ref-6" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[6] Linux man-pages. namespaces. <a href="https://man7.org/linux/man-pages/man7/namespaces.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/namespaces.7.html</a></li>
+      <li id="ref-7" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[7] Linux man-pages. cgroups. <a href="https://man7.org/linux/man-pages/man7/cgroups.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/cgroups.7.html</a></li>
+      <li id="ref-8" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[8] Linux man-pages, capabilities. Linux Kernel Documentation, Seccomp BPF. <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html" style="color:var(--red); text-decoration:none;">https://man7.org/linux/man-pages/man7/capabilities.7.html</a></li>
+      <li id="ref-9" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[9] Intel. Clear Containers, part of the Clear Linux Project. (deprecated. Project superseded by Kata Containers following the 2017 merger). <a href="https://github.com/clearcontainers" style="color:var(--red); text-decoration:none;">https://github.com/clearcontainers</a></li>
+      <li id="ref-10" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[10] Hyper.sh. runV. (public archive, Hyper.sh has since ceased operation). <a href="https://github.com/hyperhq/runv" style="color:var(--red); text-decoration:none;">https://github.com/hyperhq/runv</a></li>
+      <li id="ref-11" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[11] Kata Containers Project<a href="https://katacontainers.io/" style="color:var(--red); text-decoration:none;">https://katacontainers.io/</a></li>
+      <li id="ref-12" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[12] Kata Containers Documentation and Architecture, OpenInfra Foundation. <a href="https://github.com/kata-containers/kata-containers" style="color:var(--red); text-decoration:none;">https://github.com/kata-containers/kata-containers</a></li>
+      <li id="ref-13" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[13] Improving the Performance of VM Workloads by Optimizing Polling Time. <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/improving-performance-vm-workloads-opt-poll-time.html" style="color:var(--red); text-decoration:none;">https://www.intel.com/content/www/us/en/developer/articles/technical/improving-performance-vm-workloads-opt-poll-time.html</a></li>
+      <li id="ref-14" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[14] The Definitive KVM (Kernel-based Virtual Machine) API Documentation. <a href="https://www.kernel.org/doc/html/latest/virt/kvm/api.html" style="color:var(--red); text-decoration:none;">https://www.kernel.org/doc/html/latest/virt/kvm/api.html</a></li>
+      <li id="ref-15" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[15] Firecracker Project. Documentation, design and security model (including the jailer). <a href="https://firecracker-microvm.github.io/" style="color:var(--red); text-decoration:none;">https://firecracker-microvm.github.io/</a></li>
+      <li id="ref-16" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[16] Linux Kernel Documentation. Kernel Virtual Machine (KVM). <a href="https://www.kernel.org/doc/html/latest/virt/kvm/" style="color:var(--red); text-decoration:none;">https://www.kernel.org/doc/html/latest/virt/kvm/</a></li>
+      <li id="ref-17" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[17] Intel. Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3C: System Programming Guide (VMX and Extended Page Tables). <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" style="color:var(--red); text-decoration:none;">https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html</a></li>
+      <li id="ref-18" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[18] AMD. AMD64 Architecture Programmer's Manual, Volume 2: System Programming (Secure Virtual Machine). <a href="https://www.amd.com/en/support/tech-docs" style="color:var(--red); text-decoration:none;">https://www.amd.com/en/support/tech-docs</a></li>
+      <li id="ref-19" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[19] rust-vmm Project. A set of Rust components for building VMMs. <a href="https://github.com/rust-vmm" style="color:var(--red); text-decoration:none;">https://github.com/rust-vmm</a></li>
+      <li id="ref-20" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[20] Google. crosvm: the Chrome OS Virtual Machine Monitor. <a href="https://chromium.googlesource.com/chromiumos/platform/crosvm/" style="color:var(--red); text-decoration:none;">https://chromium.googlesource.com/chromiumos/platform/crosvm/</a></li>
+      <li id="ref-21" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[21] containers Project. libkrun. <a href="https://github.com/containers/libkrun" style="color:var(--red); text-decoration:none;">https://github.com/containers/libkrun</a></li>
+      <li id="ref-22" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[22] Microsoft. Hyperlight. <a href="https://github.com/hyperlight-dev/hyperlight" style="color:var(--red); text-decoration:none;">https://github.com/hyperlight-dev/hyperlight</a></li>
+      <li id="ref-23" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[23] Google. gVisor Documentation: Architecture Guide. <a href="https://gvisor.dev/docs/" style="color:var(--red); text-decoration:none;">https://gvisor.dev/docs/</a></li>
+      <li id="ref-24" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[24] Madhavapeddy, A., Scott, D.J. "Unikernels: The Rise of the Virtual Library Operating System." Communications of the ACM, 2014. See also IncludeOS, OSv and MirageOS. <a href="https://unikernel.org/" style="color:var(--red); text-decoration:none;">https://unikernel.org/</a></li>
     
     </ol>
+  </section>
+
+  <section class="tracked" id="comments" style="margin-top:56px; padding-top:24px; border-top:1px solid var(--rule);">
+    <h2 style="font-size:19px; font-weight:600; margin:0 0 10px; color:var(--ink);">Comments</h2>
+    <p style="font-size:13.5px; color:var(--muted); line-height:1.6; margin:0 0 16px;">
+      Comments are stored in a small database and shown below after a brief review.
+    </p>
+
+    <form id="commentForm" style="margin-bottom:28px; max-width:520px;">
+      <input type="text" id="commentName" placeholder="Name (optional)" maxlength="80"
+        style="display:block; width:100%; padding:9px 11px; margin-bottom:8px; border:1px solid var(--rule); border-radius:5px; background:var(--paper); color:var(--ink); font-family:inherit; font-size:13px; box-sizing:border-box;">
+      <textarea id="commentBody" placeholder="Your comment" required rows="4" maxlength="2000"
+        style="display:block; width:100%; padding:9px 11px; margin-bottom:10px; border:1px solid var(--rule); border-radius:5px; background:var(--paper); color:var(--ink); font-family:inherit; font-size:13px; resize:vertical; box-sizing:border-box;"></textarea>
+      <button type="submit" class="roadmap-btn" id="commentSubmitBtn">Post comment</button>
+      <p id="commentStatus" style="font-size:12.5px; color:var(--muted); margin-top:10px; min-height:1.2em;"></p>
+    </form>
+
+    <div id="commentsList"></div>
   </section>
 
   <div class="footer-nav"><a href="index.html">← Home</a><a href="#">Episode 02 →</a></div>
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
   (function(){
     var themeBtn = document.getElementById('themeToggle');
@@ -2940,6 +3037,85 @@
   if (digToggleContainer && digContentContainer) {
     digToggleContainer.addEventListener('click', () => { digToggleContainer.classList.toggle('open'); digContentContainer.classList.toggle('open'); });
   }
+
+  const digToggleIO = document.getElementById('digToggleIO');
+  const digContentIO = document.getElementById('digContentIO');
+  if (digToggleIO && digContentIO) {
+    digToggleIO.addEventListener('click', () => { digToggleIO.classList.toggle('open'); digContentIO.classList.toggle('open'); });
+  }
+
+  // ---- estimate reading time from the page's actual text content ----
+  (function(){
+    const pageEl = document.querySelector('.page');
+    const readTimeEl = document.getElementById('readTime');
+    if (!pageEl || !readTimeEl) return;
+    const words = (pageEl.innerText.match(/\S+/g) || []).length;
+    const minutes = Math.max(1, Math.round(words / 200));
+    readTimeEl.textContent = minutes + ' min read';
+  })();
+
+  // ---- comments: backed by Supabase. Fill in SUPABASE_URL / SUPABASE_ANON_KEY below to activate. ----
+  (function(){
+    var SUPABASE_URL = 'https://jweofmpuiwpkdujvkvhn.supabase.co';
+    var SUPABASE_ANON_KEY = 'sb_publishable_tyF7MHCgeYy4k5q1tKWH0g_JY4kHd4h';
+
+    var listEl = document.getElementById('commentsList');
+    var form = document.getElementById('commentForm');
+    var statusEl = document.getElementById('commentStatus');
+    if (!listEl) return;
+
+    if (!window.supabase || SUPABASE_URL.indexOf('YOUR_') === 0) {
+      listEl.innerHTML = '<p style="font-size:13px; color:var(--muted);">Comments are not configured yet.</p>';
+      if (form) form.style.display = 'none';
+      return;
+    }
+
+    var client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function escapeHtml(s){ return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    async function loadComments(){
+      var result = await client
+        .from('comments')
+        .select('name, body, created_at')
+        .eq('approved', true)
+        .order('created_at', { ascending: false });
+      var data = result.data, error = result.error;
+      if (error || !data || data.length === 0) {
+        listEl.innerHTML = '<p style="font-size:13px; color:var(--muted);">No comments yet.</p>';
+        return;
+      }
+      listEl.innerHTML = data.map(function(c){
+        var name = escapeHtml(c.name || 'Anonymous');
+        var body = escapeHtml(c.body || '');
+        var date = c.created_at ? new Date(c.created_at).toLocaleDateString() : '';
+        return '<div style="padding:14px 0; border-top:1px solid var(--rule);">' +
+               '<div style="font-size:12.5px; font-weight:600; color:var(--ink);">' + name +
+               '<span style="font-weight:400; color:var(--muted); margin-left:8px;">' + date + '</span></div>' +
+               '<div style="font-size:13.5px; color:var(--muted); margin-top:6px; line-height:1.6;">' + body + '</div>' +
+               '</div>';
+      }).join('');
+    }
+
+    if (form) {
+      form.addEventListener('submit', async function(e){
+        e.preventDefault();
+        var name = document.getElementById('commentName').value.trim() || 'Anonymous';
+        var body = document.getElementById('commentBody').value.trim();
+        if (!body) return;
+        statusEl.textContent = 'Posting…';
+        var result = await client.from('comments').insert([{ name: name, body: body, approved: false }]);
+        if (result.error) {
+          statusEl.textContent = 'Something went wrong. Please try again.';
+        } else {
+          statusEl.textContent = 'Thanks! Your comment will appear after a brief review.';
+          form.reset();
+        }
+      });
+    }
+
+    loadComments();
+  })();
 
   // ---- left-side scroll indicator: highlights the section currently in view ----
   // Uses each section's top edge crossing a fixed line near the top of the
