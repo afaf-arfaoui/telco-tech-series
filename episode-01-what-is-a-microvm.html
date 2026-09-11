@@ -2986,11 +2986,21 @@
   const roadmapBtn = document.getElementById('roadmapBtn');
   const roadmapStrip = document.getElementById('roadmapStrip');
   if (roadmapBtn && roadmapStrip) {
+    let justOpened = false;
     roadmapBtn.addEventListener('click', () => {
       roadmapStrip.classList.toggle('open');
-      roadmapBtn.textContent = roadmapStrip.classList.contains('open') ? 'Hide roadmap' : 'View roadmap';
+      const isOpen = roadmapStrip.classList.contains('open');
+      roadmapBtn.textContent = isOpen ? 'Hide roadmap' : 'View roadmap';
+      if (isOpen) {
+        // opening shifts page layout (the strip sits in normal flow), which can
+        // trigger a browser scroll-anchoring adjustment; ignore scroll events
+        // for a moment so that adjustment isn't mistaken for the reader scrolling
+        justOpened = true;
+        setTimeout(() => { justOpened = false; }, 400);
+      }
     });
     window.addEventListener('scroll', () => {
+      if (justOpened) return;
       if (roadmapStrip.classList.contains('open')) {
         roadmapStrip.classList.remove('open');
         roadmapBtn.textContent = 'View roadmap';
