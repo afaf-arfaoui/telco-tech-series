@@ -88,13 +88,9 @@
   .trail-path{
     fill:none; stroke:var(--rule); stroke-width:3; stroke-linecap:round; stroke-dasharray:1 11;
   }
-  .trail-marker{
-    fill:var(--red); opacity:0; transition:opacity .2s ease;
-    filter:drop-shadow(0 0 5px rgba(185,14,10,0.5));
-  }
-  .trail-marker.show{ opacity:1; }
-
   .node{ cursor:pointer; }
+  .node:focus{ outline:none; }
+  .node:focus .node-dot{ stroke:var(--red); stroke-width:2.5; }
   .node-dot{
     fill:var(--paper); stroke:var(--rule); stroke-width:1.6;
     transition:stroke .2s ease, fill .2s ease, r .2s ease;
@@ -218,68 +214,67 @@
   </div>
 
   <div class="map-wrap" id="mapWrap">
-    <svg class="map-svg" id="mapSvg" viewBox="0 0 960 460" preserveAspectRatio="xMidYMid meet">
-      <path class="trail-path" id="trailPath" d=""></path>
-      <circle class="trail-marker" id="trailMarker" r="5"></circle>
+    <svg class="map-svg" id="mapSvg" viewBox="0 0 960 340" preserveAspectRatio="xMidYMid meet">
+      <path class="trail-path" id="trailPath" d="M 90,80 L 295,80 L 500,80 L 705,80 L 910,80 L 910,280 L 705,280 L 500,280 L 295,280 L 90,280"></path>
 
-      <g class="node" data-target="ep-01" data-cx="90" data-cy="70" data-title="What is a microVM?" data-summary="What a microVM actually is, and how it differs from a conventional VM and from a container.">
-        <circle class="node-dot" cx="90" cy="70" r="16"></circle>
-        <text class="node-num" x="90" y="74">01</text>
-        <text class="node-label" x="90" y="102">What is a microVM?</text>
+      <g class="node" data-target="ep-01" data-cx="90" data-cy="80" data-title="What is a microVM?" data-summary="What a microVM actually is, and how it differs from a conventional VM and from a container." tabindex="0" role="button">
+        <circle class="node-dot" cx="90" cy="80" r="16"></circle>
+        <text class="node-num" x="90" y="84">01</text>
+        <text class="node-label" x="90" y="120">What is a microVM?</text>
       </g>
 
-      <g class="node" data-target="ep-02" data-cx="300" data-cy="45" data-title="Deploy a microVM" data-summary="Deploying a microVM by hand, step by step, and the network architecture behind it: bridges, TAP interfaces, and NAT.">
-        <circle class="node-dot" cx="300" cy="45" r="16"></circle>
-        <text class="node-num" x="300" y="49">02</text>
-        <text class="node-label" x="300" y="77">Deploy a microVM</text>
+      <g class="node" data-target="ep-02" data-cx="295" data-cy="80" data-title="Deploy a microVM" data-summary="Deploying a microVM by hand, step by step, and the network architecture behind it: bridges, TAP interfaces, and NAT." tabindex="0" role="button">
+        <circle class="node-dot" cx="295" cy="80" r="16"></circle>
+        <text class="node-num" x="295" y="84">02</text>
+        <text class="node-label" x="295" y="120">Deploy a microVM</text>
       </g>
 
-      <g class="node" data-target="ep-03" data-cx="500" data-cy="100" data-title="Deploy a microVM with an AI agent" data-summary="Handing that same deployment over to an AI agent, end to end.">
-        <circle class="node-dot" cx="500" cy="100" r="16"></circle>
-        <text class="node-num" x="500" y="104">03</text>
-        <text class="node-label" x="500" y="132">Deploy with an AI agent</text>
+      <g class="node" data-target="ep-03" data-cx="500" data-cy="80" data-title="Deploy a microVM with an AI agent" data-summary="Handing that same deployment over to an AI agent, end to end." tabindex="0" role="button">
+        <circle class="node-dot" cx="500" cy="80" r="16"></circle>
+        <text class="node-num" x="500" y="84">03</text>
+        <text class="node-label" x="500" y="120">Deploy with an AI agent</text>
       </g>
 
-      <g class="node" data-target="ep-04" data-cx="700" data-cy="55" data-title="What is a UPF, and how does an eUPF differ?" data-summary="What a UPF actually does, and how an eBPF-based eUPF takes a different approach.">
-        <circle class="node-dot" cx="700" cy="55" r="16"></circle>
-        <text class="node-num" x="700" y="59">04</text>
-        <text class="node-label" x="700" y="87">What is a UPF?</text>
+      <g class="node" data-target="ep-04" data-cx="705" data-cy="80" data-title="What is a UPF, and how does an eUPF differ?" data-summary="What a UPF actually does, and how an eBPF-based eUPF takes a different approach." tabindex="0" role="button">
+        <circle class="node-dot" cx="705" cy="80" r="16"></circle>
+        <text class="node-num" x="705" y="84">04</text>
+        <text class="node-label" x="705" y="120">What is a UPF?</text>
       </g>
 
-      <g class="node" data-target="ep-05" data-cx="850" data-cy="190" data-title="Basic eBPF knowledge" data-summary="Just enough eBPF to understand what is coming next, no more, no less.">
-        <circle class="node-dot" cx="850" cy="190" r="16"></circle>
-        <text class="node-num" x="850" y="194">05</text>
-        <text class="node-label" x="850" y="222">Basic eBPF</text>
+      <g class="node" data-target="ep-05" data-cx="910" data-cy="80" data-title="Basic eBPF knowledge" data-summary="Just enough eBPF to understand what is coming next, no more, no less." tabindex="0" role="button">
+        <circle class="node-dot" cx="910" cy="80" r="16"></circle>
+        <text class="node-num" x="910" y="84">05</text>
+        <text class="node-label" x="910" y="120">Basic eBPF</text>
       </g>
 
-      <g class="node" data-target="ep-06" data-cx="640" data-cy="240" data-title="How eUPF actually works" data-summary="Inside the eUPF: its architecture, and how it puts eBPF to work.">
-        <circle class="node-dot" cx="640" cy="240" r="16"></circle>
-        <text class="node-num" x="640" y="244">06</text>
-        <text class="node-label" x="640" y="272">How eUPF works</text>
+      <g class="node" data-target="ep-06" data-cx="910" data-cy="280" data-title="How eUPF actually works" data-summary="Inside the eUPF: its architecture, and how it puts eBPF to work." tabindex="0" role="button">
+        <circle class="node-dot" cx="910" cy="280" r="16"></circle>
+        <text class="node-num" x="910" y="284">06</text>
+        <text class="node-label" x="910" y="320">How eUPF works</text>
       </g>
 
-      <g class="node" data-target="ep-07" data-cx="410" data-cy="205" data-title="Deploy the eUPF in the microVM" data-summary="Bringing episode 02's deployment back to run a real workload: the eUPF, inside a microVM.">
-        <circle class="node-dot" cx="410" cy="205" r="16"></circle>
-        <text class="node-num" x="410" y="209">07</text>
-        <text class="node-label" x="410" y="237">Deploy the eUPF</text>
+      <g class="node" data-target="ep-07" data-cx="705" data-cy="280" data-title="Deploy the eUPF in the microVM" data-summary="Bringing episode 02's deployment back to run a real workload: the eUPF, inside a microVM." tabindex="0" role="button">
+        <circle class="node-dot" cx="705" cy="280" r="16"></circle>
+        <text class="node-num" x="705" y="284">07</text>
+        <text class="node-label" x="705" y="320">Deploy the eUPF</text>
       </g>
 
-      <g class="node" data-target="ep-08" data-cx="190" data-cy="300" data-title="Testing the eUPF" data-summary="Testing the deployed eUPF.">
-        <circle class="node-dot" cx="190" cy="300" r="16"></circle>
-        <text class="node-num" x="190" y="304">08</text>
-        <text class="node-label" x="190" y="332">Test the eUPF</text>
+      <g class="node" data-target="ep-08" data-cx="500" data-cy="280" data-title="Testing the eUPF" data-summary="Testing the deployed eUPF." tabindex="0" role="button">
+        <circle class="node-dot" cx="500" cy="280" r="16"></circle>
+        <text class="node-num" x="500" y="284">08</text>
+        <text class="node-label" x="500" y="320">Test the eUPF</text>
       </g>
 
-      <g class="node" data-target="ep-09" data-cx="430" data-cy="360" data-title="Deploy the monitoring agent" data-summary="A monitoring agent, deployed into the second microVM set up earlier, watching over the eUPF and the microVM it runs in.">
-        <circle class="node-dot" cx="430" cy="360" r="16"></circle>
-        <text class="node-num" x="430" y="364">09</text>
-        <text class="node-label" x="430" y="392">Deploy monitoring agent</text>
+      <g class="node" data-target="ep-09" data-cx="295" data-cy="280" data-title="Deploy the monitoring agent" data-summary="A monitoring agent, deployed into the second microVM set up earlier, watching over the eUPF and the microVM it runs in." tabindex="0" role="button">
+        <circle class="node-dot" cx="295" cy="280" r="16"></circle>
+        <text class="node-num" x="295" y="284">09</text>
+        <text class="node-label" x="295" y="320">Deploy monitoring agent</text>
       </g>
 
-      <g class="node" data-target="ep-10" data-cx="700" data-cy="330" data-title="Test everything end-to-end" data-summary="The full pipeline, tested start to finish.">
-        <circle class="node-dot" cx="700" cy="330" r="16"></circle>
-        <text class="node-num" x="700" y="334">10</text>
-        <text class="node-label" x="700" y="362">End-to-end test</text>
+      <g class="node" data-target="ep-10" data-cx="90" data-cy="280" data-title="Test everything end-to-end" data-summary="The full pipeline, tested start to finish." tabindex="0" role="button">
+        <circle class="node-dot" cx="90" cy="280" r="16"></circle>
+        <text class="node-num" x="90" y="284">10</text>
+        <text class="node-label" x="90" y="320">End-to-end test</text>
       </g>
 
     </svg>
@@ -437,53 +432,16 @@ When she is not immersed in standardizing technologies or conducting research, s
     document.getElementById('readTime').textContent = minutes + ' min read';
   })();
 
-  // the map: connect the scattered nodes with a smooth winding trail,
-  //      let a glowing marker follow the cursor along it, highlight and
-  //      pop up a summary for whichever node the marker actually reaches,
-  //      and let clicking a node jump to its full write-up in the list below
+  // the roadmap: an ordered timeline of episodes. Hovering a node shows its
+  //      summary, clicking a node jumps to its full write-up in the list below
   (function(){
-    const svg = document.getElementById('mapSvg');
+    const nodes = Array.from(document.querySelectorAll('.node'));
     const mapWrap = document.getElementById('mapWrap');
-    const path = document.getElementById('trailPath');
-    const marker = document.getElementById('trailMarker');
+    const svg = document.getElementById('mapSvg');
     const tooltip = document.getElementById('nodeTooltip');
     const ttTitle = document.getElementById('ttTitle');
     const ttSummary = document.getElementById('ttSummary');
-    const nodes = Array.from(document.querySelectorAll('.node'));
     if (!nodes.length) return;
-
-    const waypoints = nodes.map(n => ({
-      x: parseFloat(n.dataset.cx),
-      y: parseFloat(n.dataset.cy)
-    }));
-
-    let d = `M ${waypoints[0].x} ${waypoints[0].y}`;
-    for (let i = 1; i < waypoints.length; i++){
-      const prev = waypoints[i-1], cur = waypoints[i];
-      const midX = (prev.x + cur.x) / 2;
-      d += ` C ${midX} ${prev.y}, ${midX} ${cur.y}, ${cur.x} ${cur.y}`;
-    }
-    path.setAttribute('d', d);
-
-    const total = path.getTotalLength();
-    const steps = Math.max(120, Math.round(total / 3));
-    const points = [];
-    for (let i = 0; i <= steps; i++){
-      points.push(path.getPointAtLength((i / steps) * total));
-    }
-
-    function nearestPoint(x, y){
-      let best = points[0], bestDist = Infinity;
-      for (const p of points){
-        const dx = p.x - x, dy = p.y - y;
-        const dist = dx*dx + dy*dy;
-        if (dist < bestDist){ bestDist = dist; best = p; }
-      }
-      return best;
-    }
-
-    const TOUCH_RADIUS = 24; // svg units: how close the marker must get to "reach" a node
-    let activeNode = null;
 
     function svgPointToWrapPixels(x, y){
       const pt = svg.createSVGPoint();
@@ -493,54 +451,30 @@ When she is not immersed in standardizing technologies or conducting research, s
       return { x: screenPt.x - wrapRect.left, y: screenPt.y - wrapRect.top };
     }
 
-    function setActiveNode(node){
-      if (node === activeNode) return;
-      if (activeNode) activeNode.classList.remove('active');
-      activeNode = node;
-      if (!activeNode){
-        tooltip.classList.remove('show');
-        return;
-      }
-      activeNode.classList.add('active');
-      const cx = parseFloat(activeNode.dataset.cx);
-      const cy = parseFloat(activeNode.dataset.cy);
+    function showTooltipFor(node){
+      node.classList.add('active');
+      const cx = parseFloat(node.dataset.cx);
+      const cy = parseFloat(node.dataset.cy);
       const px = svgPointToWrapPixels(cx, cy);
       const wrapWidth = mapWrap.getBoundingClientRect().width;
-      let left = px.x;
-      left = Math.max(120, Math.min(wrapWidth - 120, left));
+      let left = Math.max(120, Math.min(wrapWidth - 120, px.x));
       tooltip.style.left = left + 'px';
       tooltip.style.top = px.y + 'px';
-      ttTitle.textContent = activeNode.dataset.title;
-      ttSummary.textContent = activeNode.dataset.summary;
+      ttTitle.textContent = node.dataset.title;
+      ttSummary.textContent = node.dataset.summary;
       tooltip.classList.add('show');
     }
 
-    svg.addEventListener('mousemove', (e) => {
-      const rect = svg.getBoundingClientRect();
-      const vb = svg.viewBox.baseVal;
-      const x = ((e.clientX - rect.left) / rect.width) * vb.width;
-      const y = ((e.clientY - rect.top) / rect.height) * vb.height;
-      const p = nearestPoint(x, y);
-      marker.setAttribute('cx', p.x);
-      marker.setAttribute('cy', p.y);
-      marker.classList.add('show');
-
-      let touched = null, bestDist = TOUCH_RADIUS * TOUCH_RADIUS;
-      for (const n of nodes){
-        const nx = parseFloat(n.dataset.cx), ny = parseFloat(n.dataset.cy);
-        const dx = p.x - nx, dy = p.y - ny;
-        const dist = dx*dx + dy*dy;
-        if (dist < bestDist){ bestDist = dist; touched = n; }
-      }
-      setActiveNode(touched);
-    });
-
-    svg.addEventListener('mouseleave', () => {
-      marker.classList.remove('show');
-      setActiveNode(null);
-    });
+    function hideTooltip(node){
+      node.classList.remove('active');
+      tooltip.classList.remove('show');
+    }
 
     nodes.forEach(n => {
+      n.addEventListener('mouseenter', () => showTooltipFor(n));
+      n.addEventListener('mouseleave', () => hideTooltip(n));
+      n.addEventListener('focus', () => showTooltipFor(n));
+      n.addEventListener('blur', () => hideTooltip(n));
       n.addEventListener('click', () => {
         const target = document.getElementById(n.dataset.target);
         if (!target) return;
