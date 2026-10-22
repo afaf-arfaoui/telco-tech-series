@@ -1,50 +1,4 @@
 <!DOCTYPE html>
-<!--
-  CHANGELOG (author notes, not rendered)
-  Revision: September 2026
-
-  Technical accuracy fixes:
-  - Corrected VM-exit handling: attributed decode/emulation steps to KVM vs.
-    the userspace VMM correctly (previously implied a single undifferentiated
-    "hypervisor" does everything, and that all exit causes are "emulated,"
-    which is false for causes like timer interrupts).
-  - Corrected EPT/NPT description: EPT performs only the guest-physical to
-    host-physical stage; the guest's own page tables perform guest-virtual to
-    guest-physical, as on bare metal.
-  - Corrected ioeventfd claim: it avoids a synchronous userspace round-trip,
-    not the VM exit itself, which still occurs.
-  - Corrected container-isolation contrast: containers do get normal
-    hardware-enforced per-process memory protection; what they lack is a
-    second, independent hardware layer (EPT) beneath the shared kernel.
-  - Corrected "virtio-only" overclaim (Firecracker also has a small number of
-    legacy devices: console UART, i8042 reset).
-  - Fixed backwards causality in the VM-exit/PC-emulation paragraph.
-  - Fixed timeline compression around Clear Containers/runV vs. Firecracker
-    (they predate Firecracker by years; merged into Kata in Dec 2017, about a
-    year before Firecracker was open-sourced in Nov 2018).
-  - Fixed a citation bug: three reference list entries shared id="ref-22",
-    breaking navigation for [23]; also removed an unused duplicate reference.
-  - Added a previously-unused reference ([5], capabilities/seccomp) at its
-    natural point in the text.
-
-  Structural / UX fixes:
-  - Normalized paragraph spacing (removed inconsistent inline overrides).
-  - Sped up initial animation reveal on all 5 diagrams (was ~3-3.5s idle
-    before anything appeared; now ~0.4s), same behavior on replay.
-  - Replaced assembly mnemonics in the guest mode animation with plain-English
-    labels (read/calc/check/branch/I-O).
-  - Consistent figure numbering (1-5) with titles, and each figure now cited
-    at least once in the body text. Disambiguated an in-text reference to
-    Figure 5 of the cited Firecracker paper from this document's own Figure 5.
-  - Fixed sidebar section indicator not updating once the reader reached
-    References (References is now a tracked, numbered section).
-  - Fixed citation-click scroll landing under the sticky header
-    (added scroll-padding-top).
-  - Removed all em dashes and contractions; general pass toward a more
-    formal register, including animation captions.
-  - Added meta description / Open Graph tags, a references "last verified"
-    date, and this changelog.
--->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -78,8 +32,6 @@
     --red-soft-2:rgba(255,107,99,0.22);
     --header-bg:rgba(22,24,28,0.94);
   }
-  /* Diagram widgets each declare their own local --white/--paper/--rule/--ink/--red,
-     so they don't inherit the page-level dark theme above; override them here. */
   html[data-theme="dark"] .vmd4-widget,
   html[data-theme="dark"] .gm-widget,
   html[data-theme="dark"] .ep-widget,
@@ -155,7 +107,6 @@
   h1{ font-size:30px; font-weight:600; margin:0 0 12px; line-height:1.2; }
   .dek{ font-size:15.5px; color:var(--muted); line-height:1.65; margin:0; max-width:560px; }
 
-  /* ---- diagram slot (uploaded widget goes here, unmodified) ---- */
   .diagram-wrap{ margin:28px 0 8px; }
 
   .body-copy{ margin-top:32px; font-size:15.5px; line-height:1.75; max-width:100%; }
@@ -206,7 +157,6 @@
   .footer-nav a{ font-size:12.5px; color:var(--muted); text-decoration:none; }
   .footer-nav a:hover{ color:var(--red); }
 
-  /* ---- numbered section titles ---- */
   .section-num{
     font-size:20px; font-weight:600; letter-spacing:.01em; color:var(--red);
     margin:0 0 14px; text-transform:none;
@@ -223,7 +173,6 @@
   }
   .sub-heading:first-of-type{ margin-top:20px; }
 
-  /* ---- left-side scroll indicator ---- */
   .side-nav{
     position:fixed;
     left:28px;
@@ -265,7 +214,6 @@
     .side-nav{ display:none; }
   }
 
-  /* ---- inline code style, e.g. <code>ioctl()</code> ---- */
   code{
     font-family:'IBM Plex Mono', monospace;
     font-size:0.88em;
@@ -277,7 +225,6 @@
     letter-spacing:.01em;
   }
 
-  /* ---- inline reference citation, e.g. <a class="ref-link" href="#ref-5">[5]</a> ---- */
   .ref-link{
     color:var(--red);
     text-decoration:none;
@@ -293,7 +240,6 @@
     border-left:3px solid var(--red); padding:2px 0 2px 20px;
     margin:28px 0; max-width:520px;
   }
-  /* episode video */
   .video-wrap{ margin:8px 0 40px; border:1px solid var(--rule); border-radius:8px; overflow:hidden; background:#000; aspect-ratio:16/9; }
   .video-wrap video, .video-wrap iframe{ width:100%; height:100%; display:block; border:0; }
 </style>
@@ -342,7 +288,6 @@
     <p class="byline" id="byline"><b>Dr. Afaf Arfaoui</b> &middot; September 11, 2026 &middot; <span id="readTime">…</span></p>
   </div>
 
-  <!-- EPISODE VIDEO: replace the whole <iframe ...></iframe> below with the embed code copied from Odysee -->
   <div class="video-wrap">
 <iframe id="odysee-iframe" style="width:100%; aspect-ratio:16 / 9;" src="https://odysee.com/%24/embed/%40afaf.a%3Ad%2FEp1-of-telco-tech-serie%3Af?r=4U91XYtuJdxDcTVfvYdr51n4WqVRzUM4" allowfullscreen></iframe>
   </div>
@@ -407,9 +352,6 @@
       </ul>
     </div>
       
-      <!-- ===================================================================
-     VIRTUALIZATION DIAGRAMS CAROUSEL, pasted in as-is
-===================================================================== -->
 <div class="diagram-wrap">
 
 <div class="crsl-wrap" id="crslWrap">
@@ -1409,13 +1351,8 @@
           cycle();
         })();
         </script>
-
       </div>
-
-      <!-- To add slide 4 (or more): paste another <div class="crsl-slide" data-title="..." data-replay-id="..."> here -->
-
     </div>
-
     <button class="crsl-nav crsl-next" id="crslNext" aria-label="Next diagram">›</button>
   </div>
 
@@ -1516,7 +1453,7 @@
     if(e.key === 'ArrowLeft') goTo(current - 1);
   });
 
-  render(); // first slide keeps running whatever cycle it already auto-started on page load
+  render();
 })();
 </script>
 
@@ -1593,10 +1530,7 @@
       <div class="crsl-header" style="margin-bottom:8px;">
         <span class="crsl-title">Fig. 4 &middot; Container isolation: namespaces, cgroups and security mechanisms</span>
       </div>
-      <!-- ===================================================================
-           CONTAINER ISOLATION ANIMATION, pasted in as-is (class names
-           prefixed ct- to avoid collisions with the page's own styles)
-      =================================================================== -->
+        
       <div class="diagram-wrap">
 
 <div class="ct-widget" id="ctWidget">
@@ -1986,10 +1920,6 @@
       different customers, are being triggered and terminated in this same way, and all of them are sharing the same infrastructure. Fig. 5 illustrates
       this density and churn.</p>
 
-    <!-- ===================================================================
-         FAAS DENSITY/CHURN ANIMATION, pasted in as-is (class names
-         prefixed faas- to avoid collisions with the page's own styles)
-    =================================================================== -->
     <div class="diagram-wrap">
 
       <div class="crsl-header" style="margin-bottom:8px;">
@@ -2329,10 +2259,7 @@
             queue requests into real host operations. It never has to imitate a specific NIC or disk controller chip.</li>
        </ul>
 
-            <!-- ===================================================================
-                 VIRTIO VS. EMULATION ANIMATION, pasted in as-is (class names
-                 prefixed vt- to avoid collisions with the page's own styles)
-            =================================================================== -->
+
             <div class="diagram-wrap" style="margin-top:20px;">
 
               <div class="crsl-header" style="margin-bottom:8px;">
@@ -2912,10 +2839,6 @@
   </div>
   </section>
 
-  <!-- ===================================================================
-       REFERENCES, numbered as section 8 and included in the left
-       scroll-spy nav, so the indicator tracks it like any other section
-  =================================================================== -->
   <section class="tracked" id="references" style="margin-top:56px; padding-top:24px; border-top:1px solid var(--rule);">
     <h2 style="font-size:19px; font-weight:600; margin:0 0 6px; color:var(--ink);">References</h2>
     <p style="font-size:12.5px; color:var(--muted); margin:0 0 18px;">Sources last verified: September 2026. Some of these projects move quickly. Check the linked source directly for anything current.</p>
@@ -3000,9 +2923,6 @@
       const isOpen = roadmapStrip.classList.contains('open');
       roadmapBtn.textContent = isOpen ? 'Hide roadmap' : 'View roadmap';
       if (isOpen) {
-        // opening shifts page layout (the strip sits in normal flow), which can
-        // trigger a browser scroll-anchoring adjustment; ignore scroll events
-        // for a moment so that adjustment isn't mistaken for the reader scrolling
         justOpened = true;
         setTimeout(() => { justOpened = false; }, 400);
       }
@@ -3062,7 +2982,6 @@
     digToggleIO.addEventListener('click', () => { digToggleIO.classList.toggle('open'); digContentIO.classList.toggle('open'); });
   }
 
-  // ---- estimate reading time from the page's actual text content ----
   (function(){
     const pageEl = document.querySelector('.page');
     const readTimeEl = document.getElementById('readTime');
@@ -3072,7 +2991,6 @@
     readTimeEl.textContent = minutes + ' min read';
   })();
 
-  // ---- comments: backed by Supabase. Fill in SUPABASE_URL / SUPABASE_ANON_KEY below to activate. ----
   (function(){
     var SUPABASE_URL = 'https://jweofmpuiwpkdujvkvhn.supabase.co';
     var SUPABASE_ANON_KEY = 'sb_publishable_tyF7MHCgeYy4k5q1tKWH0g_JY4kHd4h';
@@ -3135,12 +3053,6 @@
     loadComments();
   })();
 
-  // ---- left-side scroll indicator: highlights the section currently in view ----
-  // Uses each section's top edge crossing a fixed line near the top of the
-  // viewport, rather than requiring the section to occupy a mid-screen band.
-  // This is what makes short trailing sections (placeholders, etc.) still get
-  // picked up correctly once you've scrolled past their top, instead of the
-  // indicator getting stuck on whichever earlier section was tallest.
   const sideNavItems = document.querySelectorAll('.side-nav .sn-item');
   const trackedSections = Array.from(document.querySelectorAll('section.tracked'));
   const ACTIVATION_LINE = 120; // px from top of viewport
