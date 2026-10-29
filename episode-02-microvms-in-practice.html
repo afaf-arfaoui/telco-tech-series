@@ -728,7 +728,9 @@ CI_ARTIFACTS_PREFIX=$(curl -fsSL "$S3?list-type=2&amp;prefix=firecracker-ci/&amp
 <pre>rootfs_s3_path=$(curl -fsSL "$S3?list-type=2&amp;prefix=${CI_ARTIFACTS_PREFIX}${ARCH}/ubuntu-" \
     | grep -oP "(?&lt;=&lt;Key&gt;)(${CI_ARTIFACTS_PREFIX}${ARCH}/ubuntu-[0-9]+\.[0-9]+\.squashfs)(?=&lt;/Key&gt;)" \
     | sort -V | tail -1)
-: "${rootfs_s3_path:?No Ubuntu rootfs found in ${CI_ARTIFACTS_PREFIX}}"</pre>
+: "${rootfs_s3_path:?No Ubuntu rootfs found in ${CI_ARTIFACTS_PREFIX}}"
+ubuntu_version=$(basename "$rootfs_s3_path" .squashfs | grep <span class="flag">-oE</span> '[0-9]+\.[0-9]+')
+wget <span class="flag">-O</span> "ubuntu-$ubuntu_version.squashfs.upstream" "https://s3.amazonaws.com/spec.ccfc.min/$rootfs_s3_path"</pre>
     </div>
     <div class="body-copy">
       <p>The Ubuntu file is a squashfs image, which is a compressed, read-only format. We want a writable root filesystem, so we convert it to ext4 in <a href="#sec-launch" style="color:var(--red); text-decoration:none;">section 7</a>.</p>
