@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Episode 02: MicroVMs in practice</title>
+<meta name="description" content="A hands-on walkthrough of deploying microVMs: preparing the host, installing Firecracker, building kernel and rootfs artifacts, configuring networking, and bringing two microVMs up and communicating.">
+<meta property="og:title" content="Episode 02: MicroVMs in practice">
+<meta property="og:description" content="Deploying microVMs step by step: host preparation, Firecracker, kernel and rootfs, networking, and two communicating microVMs.">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAFAF8;
+    --ink:#1F2328;
+    --muted:#6B6560;
+    --rule:#E4E1DC;
+    --red:#B90E0A;
+    --red-soft:rgba(185,14,10,0.06);
+    --red-soft-2:rgba(185,14,10,0.14);
+    --header-bg:rgba(250,250,248,0.94);
+    --code-bg:#F0EEE8;
+    --code-head-bg:#E8E5DE;
+  }
+  html[data-theme="dark"]{
+    --paper:#16181C;
+    --ink:#EDEBE8;
+    --muted:#9C968F;
+    --rule:#33363B;
+    --red:#FF6B63;
+    --red-soft:rgba(255,107,99,0.10);
+    --red-soft-2:rgba(255,107,99,0.22);
+    --header-bg:rgba(22,24,28,0.94);
+    --code-bg:#1F2227;
+    --code-head-bg:#272B32;
+  }
+  html[data-theme="dark"] .vmd4-widget,
+  html[data-theme="dark"] .gm-widget,
+  html[data-theme="dark"] .ep-widget,
+  html[data-theme="dark"] .ct-widget,
+  html[data-theme="dark"] .faas-widget,
+  html[data-theme="dark"] .crsl-wrap,
+  html[data-theme="dark"] .vt-widget{
+    --white:#2A2D33;
+    --paper:#1C1F24;
+    --rule:#3A3D42;
+    --ink:#EDEBE8;
+    --red:#FF6B63;
+  }
+  html[data-theme="dark"] .ep-widget{
+    --green:#4CAF6D;
+  }
+  body{ transition:background .2s ease, color .2s ease; }
+  *{box-sizing:border-box;}
+  html{ scroll-behavior:smooth; scroll-padding-top:80px; }
+  html,body{margin:0;background:var(--paper);}
+  body{ font-family:'Inter', sans-serif; color:var(--ink); min-height:100vh; }
+  .page{ max-width:880px; margin:0 auto; padding:0 24px 80px; }
+
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:var(--header-bg);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--rule);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 24px; max-width:880px; margin:0 auto;
+  }
+  #readProgress{
+    position:fixed; top:0; left:0; height:3px; width:0%;
+    background:var(--red); z-index:30; transition:width .1s linear;
+  }
+  .series-name{ font-size:12px; letter-spacing:.04em; color:var(--muted); text-transform:uppercase; }
+  .series-name b{ color:var(--ink); font-weight:600; }
+  .roadmap-btn{
+    font-size:12px; color:var(--red); background:var(--paper);
+    border:1px solid var(--red-soft-2); border-radius:5px; padding:6px 12px; cursor:pointer;
+  }
+  .roadmap-btn:hover{ background:var(--red-soft); }
+
+  .roadmap-strip{ position:sticky; top:55px; z-index:19; max-width:880px; margin:0 auto; overflow:hidden; max-height:0; transition:max-height .25s ease; background:var(--paper); border-bottom:1px solid var(--rule); }
+  .roadmap-strip.open{ max-height:110px; }
+  .roadmap-inner{ display:flex; justify-content:center; gap:0; padding:20px 24px; overflow-x:auto; }
+  .rm-node{ display:flex; flex-direction:column; align-items:center; min-width:74px; position:relative; }
+  .rm-node:not(:last-child)::after{
+    content:'';
+    position:absolute;
+    top:14px;
+    left:calc(50% + 14px);
+    width:calc(100% - 14px);
+    height:0;
+    border-top:1.5px dashed var(--rule);
+    z-index:0;
+  }
+  .rm-dot{ width:28px; height:28px; border-radius:50%; background:var(--paper); border:1.5px solid var(--rule); display:flex; align-items:center; justify-content:center; font-size:10px; z-index:1; position:relative; color:var(--muted); transition:transform .2s ease, background .15s, border-color .15s, color .15s; }
+  .rm-node:hover .rm-dot{ transform:scale(1.35); }
+  .rm-node.current .rm-dot{ border-color:var(--red); color:var(--red); background:var(--red-soft-2); }
+  .rm-lbl{ font-size:9px; color:var(--muted); margin-top:6px; text-align:center; max-width:70px; }
+
+  .ep-header{ padding:40px 0 20px; }
+  .eyebrow{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--red); margin-bottom:10px; font-weight:600; }
+  .byline{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 28px;
+    letter-spacing:.01em;
+  }
+  .byline b{ color:var(--ink); font-weight:500; }
+  h1{ font-size:30px; font-weight:600; margin:0 0 12px; line-height:1.2; }
+  .dek{ font-size:15.5px; color:var(--muted); line-height:1.65; margin:0; max-width:560px; }
+
+  
+  .diagram-wrap{ margin:28px 0 8px; }
+
+  .body-copy{ margin-top:32px; font-size:15.5px; line-height:1.75; max-width:100%; }
+  .body-copy p{ margin:0 0 16px; }
+
+  .module-toggle{ display:flex; align-items:center; gap:10px; margin:28px 0 0; }
+  .module-toggle label{ font-size:12px; color:var(--muted); }
+  .switch{ position:relative; width:36px; height:20px; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .switch .track{ position:absolute; inset:0; background:var(--rule); border-radius:10px; cursor:pointer; transition:.2s; }
+  .switch .thumb{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.2); transition:.2s; }
+  .switch input:checked + .track{ background:var(--red-soft-2); }
+  .switch input:checked + .track .thumb{ transform:translateX(16px); background:var(--red); }
+
+  .code-module{ max-height:0; overflow:hidden; transition:max-height .25s ease; }
+  .code-module.open{ max-height:220px; margin-top:14px; }
+  .codebox{ background:var(--code-bg); border:1px solid var(--rule); border-radius:5px; overflow:hidden; }
+  .code-head{ display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--code-head-bg); border-bottom:1px solid var(--rule); font-size:11px; color:var(--muted); }
+  .copy-btn{ font-size:10px; color:var(--muted); background:var(--paper); border:1px solid var(--rule); border-radius:3px; padding:3px 8px; cursor:pointer; }
+  .copy-btn:hover{ color:var(--red); border-color:var(--red); }
+  .codebox pre{ margin:0; padding:14px 16px; font-family:'IBM Plex Mono', monospace; font-size:12px; line-height:1.7; color:var(--ink); }
+  .codebox .comment{ color:var(--muted); }
+  .codebox .flag{ color:var(--red); }
+
+  .dig-deeper{
+    margin-top:28px;
+    border-left:3px solid var(--red);
+    background:var(--red-soft);
+    border-radius:0 6px 6px 0;
+    padding:14px 18px;
+  }
+  .dig-toggle{ display:flex; align-items:center; gap:9px; cursor:pointer; font-size:13px; color:var(--red); background:none; border:none; padding:0; font-weight:600; letter-spacing:.01em; width:100%; text-align:left; }
+  .dig-toggle .dig-icon{ display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; border:1.5px solid var(--red); font-size:10px; font-weight:700; flex-shrink:0; text-transform:none; }
+  .dig-toggle .chev{ transition:transform .2s; margin-left:auto; }
+  .dig-toggle.open .chev{ transform:rotate(90deg); }
+  .dig-content{ max-height:0; overflow:hidden; transition:max-height .3s ease; font-size:13px; line-height:1.7; color:var(--muted); max-width:100%; }
+  .dig-content > *:first-child{ margin-top:14px; }
+  .dig-content.open{ max-height:2400px; margin-top:12px; }
+
+  .reflect{ margin-top:36px; padding:20px 22px; background:var(--red-soft); border:1px solid var(--red-soft-2); border-radius:6px; }
+  .reflect .q{ font-size:15px; font-weight:600; margin:0 0 12px; }
+  .reveal-btn{ font-size:12px; color:var(--red); background:var(--paper); border:1px solid var(--red); border-radius:5px; padding:6px 12px; cursor:pointer; }
+  .reveal-btn:hover{ background:var(--red-soft-2); }
+  .reflect-answer{ max-height:0; overflow:hidden; transition:max-height .25s ease; font-size:14px; color:var(--ink); line-height:1.65; }
+  .reflect-answer.open{ max-height:160px; margin-top:12px; }
+
+  .footer-nav{ display:flex; justify-content:space-between; margin-top:48px; padding-top:20px; border-top:1px solid var(--rule); }
+  .footer-nav a{ font-size:12.5px; color:var(--muted); text-decoration:none; }
+  .footer-nav a:hover{ color:var(--red); }
+
+  
+  .section-num{
+    font-size:20px; font-weight:600; letter-spacing:.01em; color:var(--red);
+    margin:0 0 14px; text-transform:none;
+  }
+  section.tracked{ padding-top:36px; }
+  section.tracked:first-of-type{ padding-top:0; }
+
+  .sub-heading{
+  font-size:17px; font-weight:600; color:var(--ink);
+  letter-spacing:0; text-transform:none;
+  margin:36px 0 14px;
+  padding-bottom:6px;
+  border-bottom:1px solid var(--rule);
+  }
+  .sub-heading:first-of-type{ margin-top:20px; }
+
+  
+  .side-nav{
+    position:fixed;
+    left:28px;
+    top:50%;
+    transform:translateY(-50%);
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    z-index:15;
+  }
+  .side-nav .sn-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    cursor:pointer;
+    text-decoration:none;
+  }
+  .side-nav .sn-dot{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--rule);
+    border:1.5px solid var(--rule);
+    flex-shrink:0;
+    transition:background .2s, border-color .2s, transform .2s;
+  }
+  .side-nav .sn-label{
+    font-size:11px; color:var(--muted);
+    white-space:nowrap;
+    opacity:0;
+    transform:translateX(-4px);
+    transition:opacity .2s, transform .2s;
+  }
+  .side-nav .sn-item:hover .sn-label{ opacity:1; transform:translateX(0); }
+  .side-nav .sn-item.active .sn-dot{
+    background:var(--red); border-color:var(--red); transform:scale(1.25);
+  }
+  .side-nav .sn-item.active .sn-label{ color:var(--ink); font-weight:500; opacity:1; transform:translateX(0); }
+
+  @media (max-width:1140px){
+    .side-nav{ display:none; }
+  }
+
+  
+  code{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.88em;
+    background:#1F2328;
+    color:#F5D7D5;
+    padding:2px 7px;
+    border-radius:4px;
+    white-space:nowrap;
+    letter-spacing:.01em;
+  }
+
+  
+  .ref-link{
+    color:var(--red);
+    text-decoration:none;
+    font-size:0.82em;
+    font-weight:600;
+    vertical-align:super;
+    margin-left:1px;
+  }
+  .ref-link:hover{ text-decoration:underline; }
+
+  .pull-quote{
+    font-size:19px; line-height:1.5; font-weight:500; color:var(--ink);
+    border-left:3px solid var(--red); padding:2px 0 2px 20px;
+    margin:28px 0; max-width:520px;
+  }
+  
+  .video-wrap{ margin:8px 0 40px; border:1px solid var(--rule); border-radius:8px; overflow:hidden; background:#000; aspect-ratio:16/9; }
+  .video-wrap video, .video-wrap iframe{ width:100%; height:100%; display:block; border:0; }
+
+  .codebox{ margin:18px 0; }
+  .codebox pre{ max-height:none; overflow-x:auto; white-space:pre; }
+  .step-label{
+    font-family:'Inter', sans-serif; font-size:16px; letter-spacing:0;
+    text-transform:none; color:var(--red); font-weight:600; margin:28px 0 8px;
+  }
+  .note{
+    margin:18px 0; padding:12px 16px; border-left:3px solid var(--rule);
+    background:var(--red-soft); border-radius:0 5px 5px 0;
+    font-size:13.5px; line-height:1.65; color:var(--muted);
+  }
+  .note b{ color:var(--ink); }
+
+  
+  .ar-widget{
+    --white:#FFFFFF; --paper:#FAFAF8; --rule:#E4E1DC; --ink:#1F2328; --muted:#6B6560; --red:#B90E0A;
+    width:100%; margin:0 auto; font-family:'Inter', sans-serif; color:var(--ink);
+    background:var(--paper); border:1px solid var(--rule); border-radius:10px; padding:22px 22px 18px;
+  }
+  .ar-widget svg{ width:100%; height:auto; display:block; overflow:visible; }
+  .ar-title{ font-size:14px; font-weight:600; color:var(--ink); margin:0 0 14px; line-height:1.4; }
+  .ar-title b{ color:var(--red); font-weight:600; margin-right:6px; }
+
+  .ar-el{ opacity:0; transition:opacity .6s ease; }
+  .ar-el.ar-in{ opacity:1; }
+
+  .ar-host{ fill:var(--white); stroke:var(--ink); stroke-width:2; transition:stroke .5s ease, stroke-width .5s ease; }
+  .ar-box{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; transition:stroke .5s ease, stroke-width .5s ease; }
+  .ar-dashed{ fill:var(--paper); stroke:var(--ink); stroke-width:1.5; stroke-dasharray:6 3; transition:stroke .5s ease, stroke-width .5s ease; }
+  .ar-line{ stroke:var(--ink); stroke-width:1.5; fill:none; transition:stroke .5s ease, stroke-width .5s ease; }
+  .ar-line.ar-optional{ stroke-dasharray:5 4; }
+
+  
+  .ar-box.ar-gray{ fill:var(--rule); }
+  .ar-box.ar-ink{ fill:var(--ink); }
+  .ar-dashed.ar-vm{ fill:var(--white); stroke:var(--red); stroke-width:2; }
+
+  
+  .ar-hl.ar-host, .ar-hl.ar-box, .ar-hl.ar-dashed, .ar-hl.ar-line{ stroke:var(--red); stroke-width:2.6; }
+
+  .ar-label{ font-family:'Inter', sans-serif; font-size:16px; fill:var(--ink); text-anchor:middle; }
+  .ar-label.ar-strong{ font-weight:600; }
+  .ar-label.ar-red{ fill:var(--red); font-weight:600; font-size:17px; }
+  .ar-label.ar-mono{ font-family:'IBM Plex Mono', monospace; font-size:14px; fill:var(--muted); }
+  .ar-label.ar-small{ font-size:13px; fill:var(--muted); }
+  .ar-label.ar-onink{ fill:var(--paper); }
+  .ar-label.ar-mono.ar-onink{ fill:var(--paper); opacity:.85; }
+
+  .ar-packet{ fill:var(--red); filter:drop-shadow(0 0 4px rgba(185,14,10,.45)); }
+  .ar-packet.ar-soft{ opacity:.55; }
+  .ar-packet.ar-reply{ fill:var(--white); stroke:var(--red); stroke-width:2.5; filter:none; }
+
+  
+  .ar-controls{ display:flex; gap:10px; margin-top:14px; }
+  .ar-btn{
+    font-family:'Segoe UI', Arial, sans-serif; font-size:18px; line-height:1; font-weight:500; color:var(--ink);
+    background:var(--paper); border:1px solid var(--rule); border-radius:50%;
+    width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:border-color .15s, color .15s, transform .15s;
+  }
+  .ar-btn:hover{ border-color:var(--red); color:var(--red); }
+  .ar-btn-spin:active{ transform:rotate(-40deg); }
+
+  @media (prefers-reduced-motion: reduce){ .ar-el{ transition:none; } }
+
+  html[data-theme="dark"] .ar-widget{
+    --white:#2A2D33; --paper:#1C1F24; --rule:#3A3D42; --ink:#EDEBE8; --muted:#9C968F; --red:#FF6B63;
+  }
+
+  
+  .step-label + .body-copy{ margin-top:0; }
+
+  
+  .rr-table-wrap{
+    margin:16px 0 28px;
+    border:1px solid var(--rule);
+    border-radius:6px;
+    overflow-x:auto;
+  }
+  .rr-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+    line-height:1.6;
+    color:var(--ink);
+  }
+  .rr-table.rr-wide{ min-width:640px; }
+  .rr-table thead th{
+    text-align:left;
+    font-family:'Inter', sans-serif;
+    font-size:13.5px;
+    letter-spacing:0;
+    text-transform:none;
+    font-weight:600;
+    color:var(--red);
+    background:var(--red-soft);
+    padding:10px 16px;
+    border-bottom:1px solid var(--rule);
+    white-space:nowrap;
+  }
+  .rr-table tbody td{
+    padding:11px 16px;
+    vertical-align:top;
+    border-top:1px solid var(--rule);
+    color:var(--muted);
+    transition:background .15s ease;
+  }
+  .rr-table tbody tr:first-child td{ border-top:none; }
+  .rr-table tbody tr:hover td{ background:var(--red-soft); }
+  .rr-table tbody td:first-child{
+    width:1%;
+    white-space:nowrap;
+    font-weight:600;
+    color:var(--ink);
+  }
+  .rr-table th + th,
+  .rr-table td + td{ border-left:1px solid var(--rule); }
+</style>
+</head>
+<body>
+
+<div id="readProgress"></div>
+<div class="topbar">
+  <span class="series-name"><b>MicroVMs, eBPF, and AI Agents in Telecom Infrastructure</b> &middot; Episode 02</span>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <button class="roadmap-btn" id="roadmapBtn">View roadmap</button>
+    <button class="roadmap-btn" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9789;</button>
+  </div>
+</div>
+
+<div class="roadmap-strip" id="roadmapStrip">
+  <div class="roadmap-inner">
+    <a class="rm-node" href="index.html" style="text-decoration:none; color:inherit;"><div class="rm-dot">00</div><div class="rm-lbl">Home</div></a>
+    <a class="rm-node" href="episode-01-what-is-a-microvm.html" style="text-decoration:none; color:inherit;"><div class="rm-dot">01</div><div class="rm-lbl">What is a microVM</div></a>
+    <div class="rm-node current"><div class="rm-dot">02</div><div class="rm-lbl">Deploy a microVM</div></div>
+    <div class="rm-node"><div class="rm-dot">03</div><div class="rm-lbl">Automate w/ agent</div></div>
+    <div class="rm-node"><div class="rm-dot">04 to 06</div><div class="rm-lbl">UPF / eBPF</div></div>
+    <div class="rm-node"><div class="rm-dot">07</div><div class="rm-lbl">Deploy eUPF</div></div>
+    <div class="rm-node"><div class="rm-dot">08</div><div class="rm-lbl">Test eUPF</div></div>
+    <div class="rm-node"><div class="rm-dot">09</div><div class="rm-lbl">Monitoring agent</div></div>
+    <div class="rm-node"><div class="rm-dot">10</div><div class="rm-lbl">End-to-end</div></div>
+  </div>
+</div>
+
+<nav class="side-nav" id="sideNav">
+  <a class="sn-item" data-target="sec-architecture" href="#sec-architecture"><span class="sn-dot"></span><span class="sn-label">1. The architecture</span></a>
+  <a class="sn-item" data-target="sec-resources" href="#sec-resources"><span class="sn-dot"></span><span class="sn-label">2. Resource Requirements</span></a>
+  <a class="sn-item" data-target="sec-prereq" href="#sec-prereq"><span class="sn-dot"></span><span class="sn-label">3. Prerequisites</span></a>
+  <a class="sn-item" data-target="sec-install" href="#sec-install"><span class="sn-dot"></span><span class="sn-label">4. Installing Firecracker</span></a>
+  <a class="sn-item" data-target="sec-artifacts" href="#sec-artifacts"><span class="sn-dot"></span><span class="sn-label">5. Kernel and root filesystem</span></a>
+  <a class="sn-item" data-target="sec-network" href="#sec-network"><span class="sn-dot"></span><span class="sn-label">6. Networking</span></a>
+  <a class="sn-item" data-target="sec-launch" href="#sec-launch"><span class="sn-dot"></span><span class="sn-label">7. Launching the first microVM</span></a>
+  <a class="sn-item" data-target="sec-second" href="#sec-second"><span class="sn-dot"></span><span class="sn-label">8. A second microVM and connectivity</span></a>
+  <a class="sn-item" data-target="sec-teardown" href="#sec-teardown"><span class="sn-dot"></span><span class="sn-label">9. Teardown and troubleshooting</span></a>
+  <a class="sn-item" data-target="sec-conclusion" href="#sec-conclusion"><span class="sn-dot"></span><span class="sn-label">10. Conclusion</span></a>
+  <a class="sn-item" data-target="references" href="#references"><span class="sn-dot"></span><span class="sn-label">References</span></a>
+  <a class="sn-item" data-target="comments" href="#comments"><span class="sn-dot"></span><span class="sn-label">Comments</span></a>
+</nav>
+
+<div class="page">
+
+  <div class="ep-header">
+    <div class="eyebrow">Episode 02</div>
+    <h1>MicroVMs in practice</h1>
+    <p class="byline"><b>Dr. Afaf Arfaoui</b> &middot; October 19, 2026</p>
+  </div>
+
+  <div class="video-wrap">
+    <iframe style="width:100%; aspect-ratio:16 / 9;" allowfullscreen></iframe>
+  </div>
+
+  <div class="body-copy" style="margin-top:0;">
+    <p>In <a href="episode-01-what-is-a-microvm.html" style="color:var(--red); text-decoration:none;">episode 01</a> we saw that a microVM is a VM that keeps the isolation enforced by the hardware that a conventional VM offers, while
+      getting rid of the legacy device emulation and the boot sequence that make VMs slow to start. This is exactly what we need for a Virtual
+      Network Function (VNF) deployment. A VNF (in this case UPF) needs to be isolated from the host and from other
+      processes sharing the machine. It also needs to spin up quickly when something fails, in case of replacement, or migration.
+      MicroVMs satisfy both requirements at once. The goal of this series is to test them for such deployments, namely a VNF and an AI agent.</p>
+
+    <p>In this episode, we are going to build the foundation that the rest of the series runs on. We will have two Firecracker microVMs on
+      a single host, connected to each other through a private network, with outbound access to the Internet. None of the microVMs will do
+      anything useful just yet. Their purpose will arrive later: the first will become the host for the eUPF in <a href="#" style="color:var(--red); text-decoration:none;">episode 07</a> and the second runs
+      the AI agent that monitors it in <a href="#" style="color:var(--red); text-decoration:none;">episode 08</a>. By the end of this episode both microVMs will be running and able to reach each other.</p>
+
+    <p>Note that everything in this episode will be done by hand. In <a href="#" style="color:var(--red); text-decoration:none;">episode 03</a>, we will hand
+      this same deployment to an AI agent.</p>
+  </div>
+
+<section class="tracked" id="sec-architecture">
+  <div class="section-num">1. The architecture</div>
+    <div class="body-copy" style="margin-top:0;">
+      <p>The system comprises one physical host, two Firecracker microVMs, one Linux bridge, and two TAP interfaces, one per microVM. Figure 1 shows how they are connected.</p>
+    </div>
+
+    <div class="diagram-wrap" style="margin:8px 0 0;">
+      <div class="ar-widget" id="arWidget">
+        <div class="ar-title"><b>Figure 1.</b>Network architecture of the host and the two microVMs</div>
+  <svg viewBox="40 20 920 650" role="img"
+       aria-label="Figure 1. Network architecture: a host system containing a bridge br0 that acts as switch and gateway, two TAP interfaces connecting two microVMs on a private subnet, and a NAT path out through the host's physical interface to the internet, with replies returning along the same path.">
+
+    
+    <rect id="ar-host" class="ar-host ar-el" x="60" y="40" width="880" height="490" rx="12"></rect>
+
+    
+    <line id="ar-l-br-tap0"  class="ar-line ar-el" x1="245" y1="170" x2="245" y2="198"></line>
+    <line id="ar-l-br-nat"   class="ar-line ar-el" x1="500" y1="170" x2="500" y2="198"></line>
+    <line id="ar-l-br-tap1"  class="ar-line ar-el" x1="755" y1="170" x2="755" y2="198"></line>
+    <line id="ar-l-tap0-vm1" class="ar-line ar-el" x1="245" y1="250" x2="245" y2="398"></line>
+    <line id="ar-l-tap1-vm2" class="ar-line ar-el" x1="755" y1="250" x2="755" y2="398"></line>
+    <line id="ar-l-nat-ens"  class="ar-line ar-el ar-optional" x1="500" y1="250" x2="500" y2="268"></line>
+    <line id="ar-l-ens-net"  class="ar-line ar-el ar-optional" x1="500" y1="340" x2="500" y2="568"></line>
+
+    <rect id="ar-bridge" class="ar-box ar-gray ar-el" x="170" y="90" width="660" height="80" rx="8"></rect>
+    <rect id="ar-tap0" class="ar-box ar-el" x="170" y="200" width="150" height="50" rx="6"></rect>
+    <rect id="ar-tap1" class="ar-box ar-el" x="680" y="200" width="150" height="50" rx="6"></rect>
+    <rect id="ar-nat" class="ar-box ar-el" x="410" y="200" width="180" height="50" rx="6"></rect>
+    <rect id="ar-ens" class="ar-box ar-ink ar-el" x="370" y="270" width="260" height="70" rx="8"></rect>
+    <rect id="ar-vm1" class="ar-dashed ar-vm ar-el" x="90" y="400" width="310" height="110" rx="8"></rect>
+    <rect id="ar-vm2" class="ar-dashed ar-vm ar-el" x="600" y="400" width="310" height="110" rx="8"></rect>
+    <rect id="ar-net" class="ar-dashed ar-el" x="420" y="570" width="160" height="80" rx="32"></rect>
+
+    
+    <path id="ar-p-vm1-vm2" d="M245,400 L245,158 L755,158 L755,400" fill="none" stroke="none"></path>
+    <path id="ar-p-vm2-vm1" d="M755,400 L755,158 L245,158 L245,400" fill="none" stroke="none"></path>
+    <path id="ar-p-vm1-net"  d="M245,400 L245,158 L500,158 L500,568" fill="none" stroke="none"></path>
+    <path id="ar-p-net-vm1"  d="M500,568 L500,158 L245,158 L245,400" fill="none" stroke="none"></path>
+    <path id="ar-p-vm2-net"  d="M755,400 L755,158 L500,158 L500,568" fill="none" stroke="none"></path>
+    <path id="ar-p-net-vm2"  d="M500,568 L500,158 L755,158 L755,400" fill="none" stroke="none"></path>
+
+    <g id="ar-packets"></g>
+
+    
+    <text id="ar-host-label" class="ar-label ar-strong ar-el" x="500" y="68">Host system</text>
+    <text id="ar-bridge-label" class="ar-label ar-strong ar-el" x="500" y="118">Bridge interface br0</text>
+    <text id="ar-bridge-ip" class="ar-label ar-mono ar-el" x="500" y="142">172.16.0.1/24 &middot; Layer-2 switch and default gateway</text>
+    <text id="ar-tap0-label" class="ar-label ar-strong ar-el" x="245" y="230">tap0</text>
+    <text id="ar-tap1-label" class="ar-label ar-strong ar-el" x="755" y="230">tap1</text>
+    <text id="ar-nat-label" class="ar-label ar-strong ar-el" x="500" y="230">NAT / Masquerade</text>
+    <text id="ar-ens-label" class="ar-label ar-strong ar-onink ar-el" x="500" y="298">wlp114s0f0 (physical NIC)</text>
+    <text id="ar-vm1-label" class="ar-label ar-red ar-el" x="245" y="431">upf-uvm</text>
+    <text id="ar-vm1-ip" class="ar-label ar-mono ar-el" x="245" y="456">IP: 172.16.0.2/24</text>
+    <text id="ar-vm1-gw" class="ar-label ar-mono ar-el" x="245" y="477">Gateway: 172.16.0.1</text>
+    <text id="ar-vm2-label" class="ar-label ar-red ar-el" x="755" y="431">agent-uvm</text>
+    <text id="ar-vm2-ip" class="ar-label ar-mono ar-el" x="755" y="456">IP: 172.16.0.3/24</text>
+    <text id="ar-vm2-gw" class="ar-label ar-mono ar-el" x="755" y="477">Gateway: 172.16.0.1</text>
+    <text id="ar-net-label" class="ar-label ar-strong ar-el" x="500" y="616">Internet</text>
+  </svg>
+        <div class="ar-controls">
+      <button class="ar-btn ar-pause" aria-label="Pause animation" title="Pause animation">&#9208;</button>
+      <button class="ar-btn ar-btn-spin ar-replay" aria-label="Replay animation" title="Replay animation">&#8635;</button>
+    </div>
+      </div>
+    </div>
+
+    <div class="step-label">Host physical interface (wlp114s0f0)</div>
+    <div class="body-copy">
+      <p>This is the host’s normal network interface connected to the local network or Internet. It is used only if outbound Internet access is 
+        enabled for the microVMs via NAT.</p>
+    </div>
+    <div class="step-label">Linux bridge (br0)</div>
+    <div class="body-copy">
+      <p>The bridge is a software Layer-2 switch inside the host that will be given the address <code>172.16.0.1/24</code>. It forwards frames between the two TAP interfaces and acts 
+        as the default gateway for both microVMs.</p>
+      <p>The outbound traffic is sent by the microVM to <code>br0</code> as its gateway, the host’s routing stack then routes it out through
+        <code>wlp114s0f0</code> (this is the name on our laptop. Use the name shown by <code>ip route show default</code> on yours), and NAT rewrites the source address on the way. That path requires two things configured on the host:
+        IP forwarding enabled (<code>net.ipv4.ip_forward=1</code>), and a masquerade rule for the <code>172.16.0.0/24</code> subnet. Both
+        are set up in <a href="#sec-network" style="color:var(--red); text-decoration:none;">section 6</a>.</p>
+    </div>
+    <div class="step-label">TAP interfaces (tap0, tap1)</div>
+    <div class="body-copy">
+      <p>These are virtual network interfaces on the host. One end attaches to the bridge, the other is where the VMM reads and writes the 
+        microVM’s traffic. We will create one for each microVM, <code>tap0</code> for <code>upf-uvm</code> and <code>tap1</code> for 
+        <code>agent-uvm</code>. They carry no address of their own.</p>
+    </div>
+    <div class="step-label">MicroVMs (upf-uvm, agent-uvm)</div>
+    <div class="body-copy">
+      <p><code>upf-uvm</code> runs the eUPF, the user plane function that will be deployed in <a href="#" style="color:var(--red); text-decoration:none;">episode 07</a>. <span style="color:#d6336c; font-weight:600;">Its interface <code>eth0</code> has the IP address 
+        <code>172.16.0.2/24</code> and the default gateway <code>172.16.0.1</code>. (To verify: the interface name is eth0; change it here if it is different.)</span></p>
+      <p><code>agent-uvm</code> hosts the AI agent that operates and monitors the eUPF, deployed in <a href="#" style="color:var(--red); text-decoration:none;">episode 08</a>. Its interface <code>eth0</code> has the 
+        IP address <code>172.16.0.3/24</code> and the default gateway <code>172.16.0.1</code>.</p>
+    </div>
+  </section>
+
+  <section class="tracked" id="sec-resources">
+  <div class="section-num">2. Resource Requirements</div>
+
+  <div class="body-copy" style="margin-top:0;">
+    <p>Before we start building microVMs, it helps to know how much room we have. The settings below are the ones we used, 
+      so you can compare them with your own machine and size your microVMs accordingly.</p>
+  </div>
+
+  <div class="sub-heading">Reference hardware</div>
+  <div class="rr-table-wrap">
+    <table class="rr-table">
+      <thead>
+        <tr><th scope="col">Component</th><th scope="col">Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>OS</td><td>Ubuntu 25.10, 64-bit</td></tr>
+        <tr><td>CPU</td><td>Intel Core Ultra 7 155H, 22 logical CPUs</td></tr>
+        <tr><td>RAM</td><td>32 GiB</td></tr>
+        <tr><td>Disk</td><td>1 TB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sub-heading">Check your own laptop</div>
+    <div class="body-copy">
+      <p>Check that your own laptop matches these specifications before deploying the microVMs. <code>free -h</code> prints a table of memory. Look at the line starting with <code>Mem:</code> and the number labelled <code>available</code>. That is the memory you can really use for the microVMs. <code>nproc</code> prints how many CPUs the host has, which roughly caps how many virtual CPUs you can share among your microVMs. The last command checks how much space is left on the drive that will hold the microVM images. <span style="color:#d6336c; font-weight:600;">If <code>/opt</code> does not exist, it checks your home folder’s drive instead.</span></p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>free <span class="flag">-h</span>
+nproc
+df <span class="flag">-h</span> /opt 2&gt;/dev/null || df <span class="flag">-h</span> ~</pre>
+    </div>
+  <div class="sub-heading">Sizing the eUPF and agent microVMs</div>
+  <div class="rr-table-wrap">
+    <table class="rr-table rr-wide">
+      <thead>
+        <tr>
+          <th scope="col">Resource</th>
+          <th scope="col">upf-uvm</th>
+          <th scope="col">agent-uvm</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Software</td><td>eUPF from the <code>edgecomllc/eupf</code> project</td><td>Agent process, with access to <code>api.anthropic.com:443</code></td></tr>
+        <tr><td>vCPU</td><td>2</td><td>2</td></tr>
+        <tr><td>RAM</td><td>4 GiB</td><td>2 GiB</td></tr>
+        <tr><td>Root disk</td><td>8 GB ext4 (sparse), built from the Firecracker CI Ubuntu rootfs</td><td>6 GB ext4 (sparse), built from the Firecracker CI Ubuntu rootfs</td></tr>
+        <tr><td>Network</td><td>1 virtio-net (N3, N4, and N6 share it. A second is optional to separate N3 and N6)</td><td>1 virtio-net</td></tr>
+        <tr><td>Kernel</td><td><span style="color:#d6336c; font-weight:600;">Firecracker CI Linux 6.1 (BPF and BTF options to be verified)</span></td><td>Firecracker CI Linux 6.1</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="body-copy" style="margin-top:0;">
+    <p>The upf-uvm carries most of the load. It gets 4 GiB of RAM, two vCPUs, and an 8 GB root disk. It uses the 
+      Firecracker CI 6.1 kernel, <span style="color:#d6336c; font-weight:600;">and we will check whether that kernel has the BPF and BTF options the eUPF’s eBPF and XDP programs need. If it 
+      doesn’t, we will build a custom kernel.</span> The agent microVM is much lighter since the Claude model runs in the cloud, so the microVM only makes API 
+      calls and watches the eUPF. It gets 2 GiB of RAM, two vCPUs, and a 6 GB root disk.</p>
+    <p>Together, the two microVMs use 6 GiB of the 32 GiB on this laptop and under a third of its 22 CPU threads. That leaves plenty of memory for the host OS. If your machine has less memory, start with smaller microVMs and increase the values only if they struggle. Keep at least a quarter of your host RAM free for the host OS.</p>
+  </div>
+</section>
+
+  <section class="tracked" id="sec-prereq">
+  <div class="section-num">3. Prerequisites</div>
+    <div class="body-copy" style="margin-top:0;">
+      <p>Firecracker runs microVMs on top of KVM, so the host has to meet a few requirements first. This step runs a short set of checks. If one fails, fix it before moving on, because the later steps assume everything passed.</p>
+    </div>
+
+    <div class="step-label">Operating system, kernel, and architecture</div>
+    <div class="body-copy">
+      <p>We need to check the Linux distribution and version, which helps with problem reporting later if needed. We also need to check the kernel version, because Firecracker needs a host kernel of 5.10 or newer.</p>
+      <p>The officially supported versions can be found in its documentation<a class="ref-link" href="#ref-1">[1]</a>, check the page for the release you plan to use.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>lsb_release <span class="flag">-ds</span>
+uname <span class="flag">-r</span></pre>
+    </div>
+    <div class="step-label">Hardware virtualization</div>
+    <div class="body-copy">
+      <p>We introduced the <code>VT-x</code> feature in <a href="episode-01-what-is-a-microvm.html" style="color:var(--red); text-decoration:none;">episode 01</a>. Now we need to check if it is available. Linux marks it as <code>vmx</code>, and the command below counts how many of your processor’s cores report it. This is a workaround: instead of asking the processor directly, the command reads the CPU flags that Linux exposes and counts them. If it returns any number above zero, the feature is there. A zero usually means the processor does not support it or it is turned off in your computer’s BIOS or UEFI settings. If you have an AMD processor, replace <code>vmx</code> with <code>svm</code>.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>grep <span class="flag">-c</span> <span class="flag">-w</span> vmx /proc/cpuinfo</pre>
+    </div>
+    <div class="step-label">The KVM module</div>
+    <div class="body-copy">
+      <p>We also discussed KVM in <a href="episode-01-what-is-a-microvm.html" style="color:var(--red); text-decoration:none;">episode 01</a>. This command lists the kernel modules, and keeps only the ones whose names start with <code>kvm</code>. On an Intel machine you should see <code>kvm</code> and <code>kvm_intel</code>. On an AMD one you should see <code>kvm</code> and <code>kvm_amd</code>. If nothing appears, KVM is not active, and therefore Firecracker cannot start a microVM.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>lsmod | grep '^kvm'</pre>
+    </div>
+    <div class="step-label">Access to the KVM device</div>
+    <div class="body-copy">
+      <p>We checked that kvm module is active, now we need to check if the kvm device is accessible. In the commands below, the first one shows the KVM device file and who is allowed to use it. The second checks whether your own user can actually use it. If it says <code>KVM: NOT accessible</code>, add yourself to the <code>kvm</code> group with <code>sudo usermod -aG kvm $USER</code>, then reboot, because the change only applies to new sessions.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>ls <span class="flag">-l</span> /dev/kvm
+test <span class="flag">-r</span> /dev/kvm &amp;&amp; test <span class="flag">-w</span> /dev/kvm &amp;&amp; echo <span class="flag">"KVM: accessible"</span> || echo <span class="flag">"KVM: NOT accessible"</span></pre>
+    </div>
+    <div class="step-label">Network uplink</div>
+    <div class="body-copy">
+      <p>We also need to collect some useful information about the network. The first command below lists the network interfaces, which gives us a baseline before we add any new ones. The second shows the default route, which names the interface your internet traffic uses. The network rules we set up later will send the microVMs’ traffic out through that interface.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>ip <span class="flag">-br</span> link
+ip route show default</pre>
+    </div>
+    <div class="step-label">Verifying if Firecracker has been previously installed</div>
+    <div class="body-copy">
+      <p>We install Firecracker in the next step. However, if a version already appears when you run the command below, it is probably left over from an earlier installation or attempt, and it could conflict with the one we are about to install.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>command <span class="flag">-v</span> firecracker || echo <span class="flag">"firecracker: not installed"</span></pre>
+    </div>
+    <div class="step-label">What a healthy host looks like</div>
+    <div class="body-copy">
+      <p>When everything is fine, you will see a supported distribution and kernel, an architecture of <code>x86_64</code> or <code>aarch64</code>, a non-zero <code>vmx</code> or <code>svm</code> count, the KVM modules loaded, <code>KVM: accessible</code>, a default route, enough memory and disk for your planned microVMs, and no Firecracker installed yet. This means the host is ready for the next step.</p>
+    </div>
+  </section>
+  <section class="tracked" id="sec-install">
+  <div class="section-num">4. Installing Firecracker</div>
+    <div class="body-copy" style="margin-top:0;">
+      <p>Firecracker publishes ready-made binaries on its GitHub releases page<a class="ref-link" href="#ref-2">[2]</a>. The commands below find the latest release and download the version that matches your processor:</p>
+    </div>
+
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>ARCH="$(uname -m)"
+release_url="https://github.com/firecracker-microvm/firecracker/releases"
+latest=$(basename "$(curl <span class="flag">-fsSLI</span> <span class="flag">-o</span> /dev/null <span class="flag">-w</span> '%{url_effective}' "${release_url}/latest")")
+: "${latest:?Could not find the latest release. Check your internet connection and try again.}"
+sudo mkdir <span class="flag">-p</span> /firecracker
+curl <span class="flag">-fsSL</span> "${release_url}/download/${latest}/firecracker-${latest}-${ARCH}.tgz" \
+| sudo tar <span class="flag">-xz</span> <span class="flag">-C</span> /firecracker</pre>
+    </div>
+
+    <div class="body-copy">
+      <p>The tarball contains the Firecracker binaries, which are named with the version and processor type. Two of them matter here:</p>
+      <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
+        <li><code>firecracker</code> is the VMM itself.</li>
+        <li><code>jailer</code> is the extra security layer we mentioned in <a href="episode-01-what-is-a-microvm.html" style="color:var(--red); text-decoration:none;">episode 01</a>. It runs Firecracker inside Linux isolation features such as namespaces and cgroups, which keeps each microVM contained when several workloads share one host. It is recommended for production, but we will not use it.</li>
+      </ul>
+      <p>To see exactly what the archive contains, including any subfolders, run <code>ls -R /firecracker</code>.</p>
+    </div>
+  </section>
+  <section class="tracked" id="sec-artifacts">
+  <div class="section-num">5. Kernel and root filesystem</div>
+    <div class="step-label">Downloading the kernel and root filesystem</div>
+    <div class="body-copy">
+      <p>A microVM needs two files before it can boot: a Linux kernel and a root filesystem. Firecracker expects the kernel as an uncompressed binary called <code>vmlinux</code>. The root filesystem holds the operating system the microVM runs. The Firecracker team publishes tested versions of both in an Amazon S3 bucket<a class="ref-link" href="#ref-1">[1]</a>, and the commands below fetch the latest ones that match your processor.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>ARCH="$(uname -m)"
+release_url="https://github.com/firecracker-microvm/firecracker/releases"
+latest_version=$(basename "$(curl <span class="flag">-fsSLI</span> <span class="flag">-o</span> /dev/null <span class="flag">-w</span> '%{url_effective}' "${release_url}/latest")")
+CI_VERSION=${latest_version%.*}</pre>
+    </div>
+    <div class="body-copy">
+      <p>Next, we look up the name of the newest kernel file:</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>kernel_s3_path=$(curl <span class="flag">-fsS</span> "https://spec.ccfc.min.s3.amazonaws.com/?prefix=firecracker-ci/$CI_VERSION/$ARCH/vmlinux-&amp;list-type=2" \
+    | grep <span class="flag">-oP</span> "(?&lt;=&lt;Key&gt;)(firecracker-ci/$CI_VERSION/$ARCH/vmlinux-[0-9]+\.[0-9]+\.[0-9]+)(?=&lt;/Key&gt;)" \
+    | sort <span class="flag">-V</span> | tail -1)
+: "${kernel_s3_path:?No kernel found for $CI_VERSION on $ARCH}"</pre>
+    </div>
+    <div class="body-copy">
+      <p>And we download the kernel:</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>wget "https://s3.amazonaws.com/spec.ccfc.min/${kernel_s3_path}"</pre>
+    </div>
+    <div class="body-copy">
+      <p>The root filesystem uses the same approach:</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>rootfs_s3_path=$(curl <span class="flag">-fsS</span> "https://spec.ccfc.min.s3.amazonaws.com/?prefix=firecracker-ci/$CI_VERSION/$ARCH/ubuntu-&amp;list-type=2" \
+    | grep <span class="flag">-oP</span> "(?&lt;=&lt;Key&gt;)(firecracker-ci/$CI_VERSION/$ARCH/ubuntu-[0-9]+\.[0-9]+\.squashfs)(?=&lt;/Key&gt;)" \
+    | sort <span class="flag">-V</span> | tail -1)
+: "${rootfs_s3_path:?No Ubuntu rootfs found for $CI_VERSION on $ARCH}"
+ubuntu_version=$(basename "$rootfs_s3_path" .squashfs | grep <span class="flag">-oE</span> '[0-9]+\.[0-9]+')
+wget <span class="flag">-O</span> "ubuntu-$ubuntu_version.squashfs.upstream" "https://s3.amazonaws.com/spec.ccfc.min/$rootfs_s3_path"</pre>
+    </div>
+    <div class="body-copy">
+      <p>The Ubuntu file is a squashfs image, which is a compressed, read-only format. We want a writable root filesystem, so we convert it to ext4 in <a href="#sec-launch" style="color:var(--red); text-decoration:none;">section 7</a>.</p>
+      <p>When this step finishes, you should have a <code>vmlinux-*</code> file and an <code>ubuntu-*.squashfs.upstream</code> file in the current folder.</p>
+    </div>
+  </section>
+  <section class="tracked" id="sec-network">
+  <div class="section-num">6. Networking</div>
+    <div class="body-copy">
+      <p>In this section we set up the host side of the lab network. We first create the bridge and the TAP devices, then add the NAT rules that let the microVMs reach the Internet. Nothing is connected yet: the microVMs attach to these interfaces when they start in <a href="#sec-launch" style="color:var(--red); text-decoration:none;">section 7</a>.</p>
+    </div>
+    <div class="step-label">Keeping NetworkManager away from the new interfaces</div>
+    <div class="body-copy">
+      <p>Ubuntu's NetworkManager manages the network connections on your laptop, and it tries to take over any interface it finds. Without this step, it could reconfigure or bring down the bridge and TAP devices we create by hand. The configuration file written below marks them as unmanaged, so NetworkManager leaves them alone.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>sudo tee /etc/NetworkManager/conf.d/99-microvm-unmanaged.conf &gt;/dev/null &lt;&lt;'EOF'
+[keyfile]
+unmanaged-devices=interface-name:br0;interface-name:tap*
+EOF
+sudo systemctl reload NetworkManager</pre>
+    </div>
+    <div class="step-label">Creating the bridge and the TAP devices</div>
+    <div class="body-copy">
+      <p>The commands first remove any leftovers from a previous attempt, so the block can be run again safely. Then they create <code>br0</code>, give it the gateway address, and create one TAP device per microVM, attached to the bridge.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>BR_DEV="br0"
+BR_IP="172.16.0.1/24"
+TAP_UPF="tap0"
+TAP_AGENT="tap1"
+
+sudo ip link del "$TAP_UPF" 2&gt;/dev/null || true
+sudo ip link del "$TAP_AGENT" 2&gt;/dev/null || true
+sudo ip link del "$BR_DEV" 2&gt;/dev/null || true
+
+sudo ip link add name "$BR_DEV" type bridge
+sudo ip addr add "$BR_IP" dev "$BR_DEV"
+sudo ip link set dev "$BR_DEV" up
+
+for TAP in "$TAP_UPF" "$TAP_AGENT"; do
+  sudo ip tuntap add dev "$TAP" mode tap
+  sudo ip link set dev "$TAP" up
+  sudo ip link set dev "$TAP" master "$BR_DEV"
+done
+
+ip -br link show br0 tap0 tap1</pre>
+    </div>
+    <div class="body-copy">
+      <p>Each of the three interfaces shows <code>UP</code> with <code>NO-CARRIER</code> and <code>state DOWN</code>. That is expected. The interfaces exist, but nothing is connected to them until Firecracker starts the microVMs.</p>
+    </div>
+    <div class="step-label">Enabling NAT for the microVM subnet</div>
+    <div class="body-copy">
+      <p>The microVMs reach the Internet through the host. The uplink name differs between machines, so we read it from the default route instead of typing it.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>HOST_IFACE=$(ip route show default | awk '/default/ {print $5; exit}')
+echo "Uplink: $HOST_IFACE"
+
+sudo sysctl -w net.ipv4.ip_forward=1
+sudo iptables -t nat -A POSTROUTING -s 172.16.0.0/24 -o "$HOST_IFACE" -j MASQUERADE
+sudo iptables -A FORWARD -i br0 -o "$HOST_IFACE" -j ACCEPT
+sudo iptables -A FORWARD -i "$HOST_IFACE" -o br0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT</pre>
+    </div>
+    <div class="body-copy">
+      <p>The first rule turns the host into a router. The MASQUERADE rule rewrites the private source addresses to the host's own address, so replies find their way back to the right microVM. The two FORWARD rules let traffic pass between the bridge and the uplink, and allow replies to connections that started inside.</p>
+      <p>Ubuntu's firewall tool, <code>ufw</code>, can set the FORWARD policy to DROP, which blocks these rules. If the microVMs cannot reach the Internet in <a href="#sec-second" style="color:var(--red); text-decoration:none;">section 8</a>, <span style="color:#d6336c; font-weight:600;">check the policy with <code>sudo iptables -S FORWARD</code>.</span></p>
+      <p>The IP forwarding setting and the iptables rules do not survive a reboot. We will put them in a script when we automate the deployment.</p>
+    </div>
+  </section>
+  <section class="tracked" id="sec-launch">
+  <div class="section-num">7. Launching the first microVM</div>
+    <div class="body-copy">
+      <p>The first microVM, <code>upf-uvm</code>, runs the eUPF. It uses the kernel and root filesystem downloaded in <a href="#sec-artifacts" style="color:var(--red); text-decoration:none;">section 5</a>. The eUPF requires Linux 5.15 or newer, so we use the 6.1 kernel. <span style="color:#d6336c; font-weight:600;">We still need to confirm that this kernel enables the BPF and BTF options the eUPF uses, and we will check that before deploying the eUPF itself.</span></p>
+    </div>
+    <div class="step-label">Preparing the upf-uvm disk</div>
+    <div class="body-copy">
+      <p>The CI root filesystem is a read-only SquashFS image with no SSH keys. We connect to each microVM from the host over SSH, which is easier than typing in the serial console, and the SSH server accepts a login only from a key it trusts. Firecracker needs an ext4 image, so we unpack the SquashFS, install a public key for SSH, and pack the result into an 8 GB ext4 file. The file is sparse, so it only uses host disk space as data is written. This step uses the Ubuntu version set in <a href="#sec-artifacts" style="color:var(--red); text-decoration:none;">section 5</a>, so run it in the same terminal.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre># Unpack the Ubuntu root filesystem into a normal folder
+sudo unsquashfs -d squashfs-upf "ubuntu-${ubuntu_version}.squashfs.upstream"
+
+# Create an SSH key pair. The private key stays on the host, the public key goes into the image
+ssh-keygen -t ed25519 -f upf-uvm-key -N ""
+
+# Install the public key where the SSH server looks for it
+sudo mkdir -p squashfs-upf/root/.ssh
+sudo cp upf-uvm-key.pub squashfs-upf/root/.ssh/authorized_keys
+sudo chmod 700 squashfs-upf/root/.ssh
+sudo chmod 600 squashfs-upf/root/.ssh/authorized_keys
+
+# Create an 8 GB sparse file and fill it with the folder contents as an ext4 filesystem
+truncate -s 8G upf-uvm.ext4
+sudo mkfs.ext4 -d squashfs-upf -F upf-uvm.ext4
+</pre>
+    </div>
+    <div class="body-copy">
+      <p>The private key stays on the host. Only the public key goes into the image.</p>
+    </div>
+    <div class="step-label">Starting the Firecracker process for upf-uvm</div>
+    <div class="body-copy">
+      <p>Firecracker is the program that runs a microVM, and each microVM needs its own Firecracker process. Open a new terminal, which we call terminal 1, and keep it open for as long as the microVM runs. The microVM's console output appears in this terminal.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre># Remove the socket file left by an earlier run, if there is one
+sudo rm -f /tmp/firecracker-upf.socket
+
+# Find the Firecracker binary extracted in section 4
+FC_BIN=$(ls /firecracker/release-*/firecracker-*-$(uname -m) | tail -1)
+
+# Start the Firecracker process, which creates the socket that the next commands use
+sudo "$FC_BIN" --api-sock /tmp/firecracker-upf.socket
+</pre>
+    </div>
+    <div class="step-label">Configuring upf-uvm</div>
+    <div class="body-copy">
+      <p>The commands below run in a second terminal, which we call terminal 2. They send settings to the Firecracker process in terminal 1 through its socket. The eUPF gets 2 vCPUs and 4 GiB of RAM. Setting <code>smt</code> to false turns off simultaneous multithreading (Intel calls it Hyper-Threading) for this microVM, so each vCPU runs on a whole physical core. Firecracker cannot add vCPUs to a running microVM, so the heavy-load tests will need a restart with a higher count.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre># Variables used by the commands below
+API_SOCKET_UPF="/tmp/firecracker-upf.socket"
+KERNEL="./$(ls vmlinux-* | tail -1)"
+KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off ip=172.16.0.2::172.16.0.1:255.255.255.0::eth0:off:1.1.1.1:8.8.8.8"
+ROOTFS_UPF="./upf-uvm.ext4"
+FC_MAC_UPF="06:00:AC:10:00:02"
+
+# Log file for Firecracker
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data '{"log_path": "./firecracker-upf.log", "level": "Debug", "show_level": true, "show_log_origin": true}' \
+  http://localhost/logger
+
+# 2 vCPUs, 4 GiB of RAM, and simultaneous multithreading off
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data '{"vcpu_count": 2, "mem_size_mib": 4096, "smt": false}' \
+  http://localhost/machine-config
+
+# Kernel to boot, and the arguments passed to it
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data "{\"kernel_image_path\": \"${KERNEL}\", \"boot_args\": \"${KERNEL_BOOT_ARGS}\"}" \
+  http://localhost/boot-source
+
+# Root disk, the ext4 image built above
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data "{\"drive_id\": \"rootfs\", \"path_on_host\": \"${ROOTFS_UPF}\", \"is_root_device\": true, \"is_read_only\": false}" \
+  http://localhost/drives/rootfs
+
+# Network interface, attached to the tap0 device on the bridge
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data "{\"iface_id\": \"net1\", \"guest_mac\": \"${FC_MAC_UPF}\", \"host_dev_name\": \"tap0\"}" \
+  http://localhost/network-interfaces/net1
+
+# Wait briefly so the settings are applied, then boot the microVM
+sleep 0.015
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data '{"action_type": "InstanceStart"}' \
+  http://localhost/actions
+</pre>
+    </div>
+    <div class="body-copy">
+      <p>The IP address comes from the <code>ip=</code> argument in the boot arguments, so the kernel configures <code>eth0</code> before the system starts and no manual step is needed. The MAC address only has to be unique on the bridge, and <code>06:00:AC:10:00:02</code> follows the same pattern as the address. The other arguments follow the getting-started guide.</p>
+    </div>
+    <div class="step-label">Logging in to upf-uvm</div>
+    <div class="body-copy">
+      <p><span style="color:#d6336c; font-weight:600;">When the first terminal shows a login prompt, log in on that console as <code>root</code>. The getting-started guide uses <code>root</code> for both the login and the password. Then check that the address, route, and DNS servers were set at boot.</span></p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>guest shell (upf-uvm)</span><button class="copy-btn">Copy</button></div>
+<pre>ip -br addr show eth0
+ip route show default
+cat /etc/resolv.conf</pre>
+    </div>
+    <div class="body-copy">
+      <p>Once the checks pass, you can connect from the host with <code>ssh -i upf-uvm-key root@172.16.0.2</code>.</p>
+    </div>
+  </section>
+  <section class="tracked" id="sec-second">
+  <div class="section-num">8. A second microVM and connectivity</div>
+    <div class="body-copy">
+      <p>The second microVM, <code>agent-uvm</code>, runs the AI agent that monitors the eUPF. It is built the same way as <code>upf-uvm</code>, with its own disk, key, socket, and TAP device. The agent is lighter, so it gets 2 vCPUs and 2 GiB of RAM.</p>
+    </div>
+    <div class="step-label">Preparing the agent-uvm disk</div>
+    <div class="body-copy">
+      <p>Build the agent-uvm disk the same way as upf-uvm: unpack the same Ubuntu root filesystem, create a new SSH key, and build a 6 GB ext4 image named <code>agent-uvm.ext4</code>.</p>
+    </div>
+    <div class="step-label">Starting the Firecracker process for agent-uvm</div>
+    <div class="body-copy">
+      <p>Open a third terminal for this microVM's Firecracker process, and keep it open. The boot arguments for agent-uvm differ from upf-uvm because they carry this microVM's address, so they are set in this terminal first.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre># Variables for the agent-uvm boot, which carry the agent's address
+KERNEL="./$(ls vmlinux-* | tail -1)"
+KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off ip=172.16.0.3::172.16.0.1:255.255.255.0::eth0:off:1.1.1.1:8.8.8.8"
+
+# Remove the socket file left by an earlier run, if there is one
+sudo rm -f /tmp/firecracker-agent.socket
+
+# Find the Firecracker binary extracted in section 4
+FC_BIN=$(ls /firecracker/release-*/firecracker-*-$(uname -m) | tail -1)
+
+# Start the Firecracker process, which creates the socket that the next commands use
+sudo "$FC_BIN" --api-sock /tmp/firecracker-agent.socket
+</pre>
+    </div>
+    <div class="step-label">Configuring agent-uvm</div>
+    <div class="body-copy">
+      <p>Run these in the second terminal. The commands are the same as for <code>upf-uvm</code>, with the agent's values: 2 vCPUs, 2 GiB of RAM, its own disk, MAC address, and TAP device. The boot arguments carry this microVM's address, so the first line of the command sets them for this terminal.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre># Variables used by the commands below
+KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off ip=172.16.0.3::172.16.0.1:255.255.255.0::eth0:off:1.1.1.1:8.8.8.8"
+API_SOCKET_AGENT="/tmp/firecracker-agent.socket"
+ROOTFS_AGENT="./agent-uvm.ext4"
+FC_MAC_AGENT="06:00:AC:10:00:03"
+
+# Log file for Firecracker
+sudo curl -X PUT --unix-socket "$API_SOCKET_AGENT" \
+  --data '{"log_path": "./firecracker-agent.log", "level": "Debug", "show_level": true, "show_log_origin": true}' \
+  http://localhost/logger
+
+# 2 vCPUs, 2 GiB of RAM, and simultaneous multithreading off
+sudo curl -X PUT --unix-socket "$API_SOCKET_AGENT" \
+  --data '{"vcpu_count": 2, "mem_size_mib": 2048, "smt": false}' \
+  http://localhost/machine-config
+
+# Kernel to boot, and the arguments passed to it
+sudo curl -X PUT --unix-socket "$API_SOCKET_AGENT" \
+  --data "{\"kernel_image_path\": \"${KERNEL}\", \"boot_args\": \"${KERNEL_BOOT_ARGS}\"}" \
+  http://localhost/boot-source
+
+# Root disk, the ext4 image for agent-uvm
+sudo curl -X PUT --unix-socket "$API_SOCKET_AGENT" \
+  --data "{\"drive_id\": \"rootfs\", \"path_on_host\": \"${ROOTFS_AGENT}\", \"is_root_device\": true, \"is_read_only\": false}" \
+  http://localhost/drives/rootfs
+
+# Network interface, attached to the tap1 device on the bridge
+sudo curl -X PUT --unix-socket "$API_SOCKET_AGENT" \
+  --data "{\"iface_id\": \"net1\", \"guest_mac\": \"${FC_MAC_AGENT}\", \"host_dev_name\": \"tap1\"}" \
+  http://localhost/network-interfaces/net1
+
+# Wait briefly so the settings are applied, then boot the microVM
+sleep 0.015
+sudo curl -X PUT --unix-socket "$API_SOCKET_AGENT" \
+  --data '{"action_type": "InstanceStart"}' \
+  http://localhost/actions
+</pre>
+    </div>
+    <div class="step-label">Logging in to agent-uvm</div>
+    <div class="body-copy">
+      <p>Log in on the console as <code>root</code>. The address is already set by the boot arguments, so check it with the command below.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>guest shell (agent-uvm)</span><button class="copy-btn">Copy</button></div>
+<pre>ip -br addr show eth0
+ip route show default
+cat /etc/resolv.conf</pre>
+    </div>
+    <div class="step-label">Testing connectivity</div>
+    <div class="body-copy">
+      <p>From <code>agent-uvm</code>, run these in order. Each one checks a different part of the network: the bridge, the other microVM, the Internet by address, and DNS.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>guest shell (agent-uvm)</span><button class="copy-btn">Copy</button></div>
+<pre>ping -c 2 172.16.0.1
+ping -c 2 172.16.0.2
+ping -c 2 1.1.1.1
+ping -c 2 google.com
+apt update</pre>
+    </div>
+    <div class="body-copy">
+      <p>From <code>upf-uvm</code>, check that it reaches the agent with <code>ping -c 2 172.16.0.3</code>.</p>
+    </div>
+    <div class="body-copy">
+      <p>If <code>agent-uvm</code> reaches <code>upf-uvm</code> but not the Internet, the problem is on the host. Check these settings. If the host reaches the Internet but a microVM does not, the cause is usually the guest's default route or DNS.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>cat /proc/sys/net/ipv4/ip_forward
+sudo iptables -t nat -L POSTROUTING -n -v
+sudo iptables -S FORWARD</pre>
+    </div>
+  </section>
+  <section class="tracked" id="sec-teardown">
+  <div class="section-num">9. Teardown and troubleshooting</div>
+    <div class="body-copy" style="margin-top:0;">
+      <p></p>
+    </div>
+
+    <div class="step-label"></div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre></pre>
+    </div>
+
+    <div class="body-copy">
+      <p></p>
+    </div>
+
+    <div class="dig-deeper">
+      <button class="dig-toggle"><span class="dig-icon">i</span> Further details <span class="chev">&rsaquo;</span></button>
+      <div class="dig-content">
+        <p></p>
+      </div>
+    </div>
+  </section>
+  <section class="tracked" id="sec-conclusion">
+  <div class="section-num">10. Conclusion</div>
+    <div class="body-copy" style="margin-top:0;">
+      <p></p>
+    </div>
+  </section>
+
+  
+  <section class="tracked" id="references" style="margin-top:56px; padding-top:24px; border-top:1px solid var(--rule);">
+    <h2 style="font-size:19px; font-weight:600; margin:0 0 6px; color:var(--ink);">References</h2>
+    <p style="font-size:12.5px; color:var(--muted); margin:0 0 18px;">Sources last verified: October 2026. Some of these projects move quickly. Check the linked source directly for anything current.</p>
+    <ol class="ref-list" style="list-style:none; margin:0; padding:0; font-size:13px; line-height:1.7; color:var(--muted);">
+      <li id="ref-1" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[1] Firecracker Project. Getting Started and documentation. <a href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md" target="_blank" rel="noopener noreferrer" style="color:var(--red); text-decoration:none;">https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md</a></li>
+      <li id="ref-2" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[2] Firecracker Project. Releases. GitHub. <a href="https://github.com/firecracker-microvm/firecracker/releases" target="_blank" rel="noopener noreferrer" style="color:var(--red); text-decoration:none;">https://github.com/firecracker-microvm/firecracker/releases</a></li>
+      
+    </ol>
+  </section>
+
+  <section class="tracked" id="comments" style="margin-top:56px; padding-top:24px; border-top:1px solid var(--rule);">
+    <h2 style="font-size:19px; font-weight:600; margin:0 0 10px; color:var(--ink);">Comments</h2>
+    <p style="font-size:13.5px; color:var(--muted); line-height:1.6; margin:0 0 16px;">
+      Comments are stored in a small database and shown below after a brief review.
+    </p>
+
+    <form id="commentForm" style="margin-bottom:28px; max-width:520px;">
+      <input type="text" id="commentName" placeholder="Name (optional)" maxlength="80"
+        style="display:block; width:100%; padding:9px 11px; margin-bottom:8px; border:1px solid var(--rule); border-radius:5px; background:var(--paper); color:var(--ink); font-family:inherit; font-size:13px; box-sizing:border-box;">
+      <textarea id="commentBody" placeholder="Your comment" required rows="4" maxlength="2000"
+        style="display:block; width:100%; padding:9px 11px; margin-bottom:10px; border:1px solid var(--rule); border-radius:5px; background:var(--paper); color:var(--ink); font-family:inherit; font-size:13px; resize:vertical; box-sizing:border-box;"></textarea>
+      <button type="submit" class="roadmap-btn" id="commentSubmitBtn">Post comment</button>
+      <p id="commentStatus" style="font-size:12.5px; color:var(--muted); margin-top:10px; min-height:1.2em;"></p>
+    </form>
+
+    <div id="commentsList"></div>
+  </section>
+
+  <div class="footer-nav"><a href="episode-01-what-is-a-microvm.html">&larr; Episode 01</a><a href="#">Episode 03 &rarr;</a></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  (function(){
+    var themeBtn = document.getElementById('themeToggle');
+    var stored = null;
+    try { stored = localStorage.getItem('microvm-theme'); } catch(e) {}
+    if (stored === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', function(){
+        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDark) {
+          document.documentElement.removeAttribute('data-theme');
+          try { localStorage.setItem('microvm-theme', 'light'); } catch(e) {}
+        } else {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          try { localStorage.setItem('microvm-theme', 'dark'); } catch(e) {}
+        }
+      });
+    }
+  })();
+
+  const roadmapBtn = document.getElementById('roadmapBtn');
+  const roadmapStrip = document.getElementById('roadmapStrip');
+  if (roadmapBtn && roadmapStrip) {
+    let justOpened = false;
+    roadmapBtn.addEventListener('click', () => {
+      roadmapStrip.classList.toggle('open');
+      const isOpen = roadmapStrip.classList.contains('open');
+      roadmapBtn.textContent = isOpen ? 'Hide roadmap' : 'View roadmap';
+      if (isOpen) {
+        justOpened = true;
+        setTimeout(() => { justOpened = false; }, 400);
+      }
+    });
+    window.addEventListener('scroll', () => {
+      if (justOpened) return;
+      if (roadmapStrip.classList.contains('open')) {
+        roadmapStrip.classList.remove('open');
+        roadmapBtn.textContent = 'View roadmap';
+      }
+    }, { passive: true });
+  }
+
+  document.querySelectorAll('.dig-toggle').forEach(function(btn){
+    var content = btn.parentElement.querySelector('.dig-content');
+    if (!content) return;
+    btn.addEventListener('click', function(){
+      btn.classList.toggle('open');
+      content.classList.toggle('open');
+    });
+  });
+
+  document.querySelectorAll('.codebox .copy-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var pre = btn.closest('.codebox').querySelector('pre');
+      if (pre) navigator.clipboard?.writeText(pre.innerText);
+      btn.textContent = 'Copied';
+      setTimeout(function(){ btn.textContent = 'Copy'; }, 1200);
+    });
+  });
+
+  (function(){
+    var SUPABASE_URL = 'https://jweofmpuiwpkdujvkvhn.supabase.co';
+    var SUPABASE_ANON_KEY = 'sb_publishable_tyF7MHCgeYy4k5q1tKWH0g_JY4kHd4h';
+
+    var listEl = document.getElementById('commentsList');
+    var form = document.getElementById('commentForm');
+    var statusEl = document.getElementById('commentStatus');
+    if (!listEl) return;
+
+    if (!window.supabase || SUPABASE_URL.indexOf('YOUR_') === 0) {
+      listEl.innerHTML = '<p style="font-size:13px; color:var(--muted);">Comments are not configured yet.</p>';
+      if (form) form.style.display = 'none';
+      return;
+    }
+
+    var client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function escapeHtml(s){ return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    async function loadComments(){
+      var result = await client
+        .from('comments')
+        .select('name, body, created_at')
+        .eq('approved', true)
+        .order('created_at', { ascending: false });
+      var data = result.data, error = result.error;
+      if (error || !data || data.length === 0) {
+        listEl.innerHTML = '<p style="font-size:13px; color:var(--muted);">No comments yet.</p>';
+        return;
+      }
+      listEl.innerHTML = data.map(function(c){
+        var name = escapeHtml(c.name || 'Anonymous');
+        var body = escapeHtml(c.body || '');
+        var date = c.created_at ? new Date(c.created_at).toLocaleDateString() : '';
+        return '<div style="padding:14px 0; border-top:1px solid var(--rule);">' +
+               '<div style="font-size:12.5px; font-weight:600; color:var(--ink);">' + name +
+               '<span style="font-weight:400; color:var(--muted); margin-left:8px;">' + date + '</span></div>' +
+               '<div style="font-size:13.5px; color:var(--muted); margin-top:6px; line-height:1.6;">' + body + '</div>' +
+               '</div>';
+      }).join('');
+    }
+
+    if (form) {
+      form.addEventListener('submit', async function(e){
+        e.preventDefault();
+        var name = document.getElementById('commentName').value.trim() || 'Anonymous';
+        var body = document.getElementById('commentBody').value.trim();
+        if (!body) return;
+        statusEl.textContent = 'Posting…';
+        var result = await client.from('comments').insert([{ name: name, body: body, approved: false }]);
+        if (result.error) {
+          statusEl.textContent = 'Something went wrong. Please try again.';
+        } else {
+          statusEl.textContent = 'Thanks! Your comment will appear after a brief review.';
+          form.reset();
+        }
+      });
+    }
+
+    loadComments();
+  })();
+
+  const sideNavItems = document.querySelectorAll('.side-nav .sn-item');
+  const trackedSections = Array.from(document.querySelectorAll('section.tracked'));
+  const ACTIVATION_LINE = 120;
+
+  const progressBar = document.getElementById('readProgress');
+  function updateReadProgress(){
+    if(!progressBar) return;
+    const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+    const pct = scrollable > 0 ? Math.min(100, Math.max(0, (window.scrollY / scrollable) * 100)) : 0;
+    progressBar.style.width = pct + '%';
+  }
+
+  let lockedTarget = null;
+  ['wheel','touchstart','keydown','mousedown'].forEach(function(evt){
+    window.addEventListener(evt, function(){ lockedTarget = null; }, { passive: true });
+  });
+
+  function updateActiveSection(){
+    let current = null;
+    for (const sec of trackedSections) {
+      if (sec.getBoundingClientRect().top - ACTIVATION_LINE <= 0) {
+        current = sec;
+      }
+    }
+    const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+    if (atBottom && trackedSections.length) {
+      current = trackedSections[trackedSections.length - 1];
+    }
+    if (lockedTarget) {
+      const locked = trackedSections.find(s => s.id === lockedTarget);
+      if (locked) current = locked;
+    }
+    sideNavItems.forEach(item => {
+      item.classList.toggle('active', !!current && item.dataset.target === current.id);
+    });
+  }
+
+  window.addEventListener('scroll', updateActiveSection, { passive: true });
+  window.addEventListener('resize', updateActiveSection);
+  window.addEventListener('load', updateActiveSection);
+  window.addEventListener('scroll', updateReadProgress, { passive: true });
+  window.addEventListener('resize', updateReadProgress);
+  updateActiveSection();
+  updateReadProgress();
+
+  sideNavItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      lockedTarget = item.dataset.target;
+      updateActiveSection();
+      document.getElementById(item.dataset.target).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+<script>
+function initArchitectureWidget(root, opts){
+  opts = opts || {};
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  var timeline = [], liveTimers = [], elapsed = 0, runStartedAt = 0, paused = false;
+  var clock = 0, lastT = 0, flows = [];
+
+  function $(id){ return root.querySelector('#ar-' + id); }
+  function add(at, fn){ timeline.push({ at: at, fn: fn, done: false }); }
+  function clearLive(){ liveTimers.forEach(clearTimeout); liveTimers = []; }
+  function animations(){
+    return root.getAnimations ? root.getAnimations({ subtree: true }) : (document.getAnimations ? document.getAnimations() : []);
+  }
+
+  function scheduleFrom(from){
+    runStartedAt = Date.now();
+    timeline.forEach(function(e){
+      if (e.done) return;
+      var delay = e.at - from;
+      if (delay <= 0) { e.done = true; e.fn(); }
+      else liveTimers.push(setTimeout(function(){ e.done = true; e.fn(); }, delay));
+    });
+  }
+
+  function reveal(s){
+    add(s.at, function(){
+      s.ids.forEach(function(id){ $(id).classList.add('ar-in'); });
+      s.emph.forEach(function(id){ $(id).classList.add('ar-hl'); });
+    });
+    add(s.at + 1300, function(){
+      s.emph.forEach(function(id){ $(id).classList.remove('ar-hl'); });
+    });
+  }
+
+  function makeFlow(pathId, speed, interval, offset, soft, reply){
+    var path = $(pathId);
+    flows.push({ path: path, len: path.getTotalLength(), speed: speed, interval: interval,
+                 soft: !!soft, reply: !!reply, nextSpawn: clock + offset, active: [] });
+  }
+
+  function frame(t){
+    if (!lastT) lastT = t;
+    var dt = t - lastT; lastT = t;
+    if (!paused) clock += Math.min(dt, 100);
+
+    var layer = $('packets');
+    flows.forEach(function(f){
+      if (!paused && clock >= f.nextSpawn) {
+        var c = document.createElementNS(SVG_NS, 'circle');
+        c.setAttribute('r', 5);
+        c.setAttribute('class', 'ar-packet' + (f.soft ? ' ar-soft' : '') + (f.reply ? ' ar-reply' : ''));
+        layer.appendChild(c);
+        f.active.push({ el: c, born: clock });
+        f.nextSpawn = clock + f.interval;
+      }
+      f.active = f.active.filter(function(p){
+        var dist = (clock - p.born) / 1000 * f.speed;
+        if (dist >= f.len) { layer.removeChild(p.el); return false; }
+        var pt = f.path.getPointAtLength(dist);
+        p.el.setAttribute('cx', pt.x);
+        p.el.setAttribute('cy', pt.y);
+        var edge = Math.min(dist, f.len - dist);
+        p.el.setAttribute('opacity', Math.min(1, edge / 40));
+        return true;
+      });
+    });
+    requestAnimationFrame(frame);
+  }
+
+  var pauseBtn = root.querySelector('.ar-pause');
+  var replayBtn = root.querySelector('.ar-replay');
+  function setPauseUI(isPaused){
+    pauseBtn.innerHTML = isPaused ? '&#9654;' : '&#9208;';
+    pauseBtn.setAttribute('aria-label', isPaused ? 'Resume animation' : 'Pause animation');
+    pauseBtn.setAttribute('title', isPaused ? 'Resume animation' : 'Pause animation');
+  }
+  function togglePause(){
+    if (paused) {
+      paused = false;
+      scheduleFrom(elapsed);
+      animations().forEach(function(a){ a.play(); });
+    } else {
+      paused = true;
+      elapsed += Date.now() - runStartedAt;
+      clearLive();
+      animations().forEach(function(a){ a.pause(); });
+    }
+    setPauseUI(paused);
+  }
+
+  function play(){
+    clearLive();
+    timeline = []; elapsed = 0; paused = false; setPauseUI(false);
+    flows = []; clock = 0; $('packets').innerHTML = '';
+    root.querySelectorAll('.ar-el').forEach(function(e){ e.classList.remove('ar-in', 'ar-hl'); });
+
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    var steps = [
+      { at: 400,  ids: ['host','host-label'], emph: ['host'] },
+      { at: 1800, ids: ['bridge','bridge-label','bridge-ip'], emph: ['bridge'] },
+      { at: 3600, ids: ['l-br-tap0','l-br-tap1','tap0','tap0-label','tap1','tap1-label'],
+                  emph: ['tap0','tap1','l-br-tap0','l-br-tap1'] },
+      { at: 5400, ids: ['l-tap0-vm1','l-tap1-vm2','vm1','vm1-label','vm1-ip','vm1-gw','vm2','vm2-label','vm2-ip','vm2-gw'],
+                  emph: ['vm1','vm2','l-tap0-vm1','l-tap1-vm2'] },
+      { at: 7400, ids: ['l-br-nat','nat','nat-label','l-nat-ens','ens','ens-label','l-ens-net','net','net-label'],
+                  emph: ['nat','ens','net','l-br-nat','l-nat-ens','l-ens-net'] }
+    ];
+
+    if (reduce) {
+      steps.forEach(function(s){ s.ids.forEach(function(id){ $(id).classList.add('ar-in'); }); });
+      return;
+    }
+
+    steps.forEach(reveal);
+
+    add(9400, function(){
+      makeFlow('p-vm1-vm2', 330, 2600, 0);
+      makeFlow('p-vm2-vm1', 330, 2600, 1300);
+      makeFlow('p-vm1-net', 330, 4200, 700, true);
+      makeFlow('p-vm2-net', 330, 4200, 2100, true);
+      makeFlow('p-net-vm1', 330, 4200, 3600, false, true);
+      makeFlow('p-net-vm2', 330, 4200, 4500, false, true);
+    });
+
+    scheduleFrom(0);
+  }
+
+  pauseBtn.addEventListener('click', togglePause);
+  replayBtn.addEventListener('click', play);
+
+  if (opts.keys) {
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'r' || e.key === 'R') play();
+      if (e.key === ' ' && e.target.tagName !== 'BUTTON') { e.preventDefault(); togglePause(); }
+    });
+  }
+
+  requestAnimationFrame(frame);
+
+  if (opts.startWhenVisible && 'IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function(entries){
+      if (entries[0].isIntersecting) { obs.disconnect(); play(); }
+    }, { threshold: 0.35 });
+    obs.observe(root);
+  } else {
+    play();
+  }
+  return { play: play, togglePause: togglePause };
+}
+
+initArchitectureWidget(document.getElementById('arWidget'), { startWhenVisible: true });
+</script>
+</body>
+</html>
