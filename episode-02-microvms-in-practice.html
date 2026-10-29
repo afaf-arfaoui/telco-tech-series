@@ -696,19 +696,22 @@ curl <span class="flag">-fsSL</span> "${release_url}/download/${latest}/firecrac
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
 <pre>ARCH="$(uname -m)"
-release_url="https://github.com/firecracker-microvm/firecracker/releases"
-latest_version=$(basename "$(curl <span class="flag">-fsSLI</span> <span class="flag">-o</span> /dev/null <span class="flag">-w</span> '%{url_effective}' "${release_url}/latest")")
-CI_VERSION=${latest_version%.*}</pre>
+S3="https://s3.amazonaws.com/spec.ccfc.min"
+
+CI_ARTIFACTS_PREFIX=$(curl -fsSL "$S3?list-type=2&amp;prefix=firecracker-ci/&amp;delimiter=/" \
+    | grep -oP "(?&lt;=&lt;Prefix&gt;)firecracker-ci/[0-9]{8}-[^/]+/(?=&lt;/Prefix&gt;)" \
+    | sort \
+    | tail -1)</pre>
     </div>
     <div class="body-copy">
       <p>Next, we look up the name of the newest kernel file:</p>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre>kernel_s3_path=$(curl -fsS "https://s3.amazonaws.com/spec.ccfc.min/?prefix=firecracker-ci/$CI_VERSION/$ARCH/vmlinux-&amp;list-type=2" \
-    | grep -oP "(?&lt;=&lt;Key&gt;)(firecracker-ci/$CI_VERSION/$ARCH/vmlinux-[0-9]+\.[0-9]+\.[0-9]+)(?=&lt;/Key&gt;)" \
+<pre>kernel_s3_path=$(curl -fsSL "$S3?list-type=2&amp;prefix=${CI_ARTIFACTS_PREFIX}${ARCH}/vmlinux-" \
+    | grep -oP "(?&lt;=&lt;Key&gt;)(${CI_ARTIFACTS_PREFIX}${ARCH}/vmlinux-[0-9]+\.[0-9]+\.[0-9]{1,3})(?=&lt;/Key&gt;)" \
     | sort -V | tail -1)
-: "${kernel_s3_path:?No kernel found for $CI_VERSION on $ARCH}"</pre>
+: "${kernel_s3_path:?No kernel found in ${CI_ARTIFACTS_PREFIX}}"</pre>
     </div>
     <div class="body-copy">
       <p>And we download the kernel:</p>
@@ -722,12 +725,10 @@ CI_VERSION=${latest_version%.*}</pre>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre>rootfs_s3_path=$(curl -fsS "https://s3.amazonaws.com/spec.ccfc.min/?prefix=firecracker-ci/$CI_VERSION/$ARCH/ubuntu-&amp;list-type=2" \
-    | grep -oP "(?&lt;=&lt;Key&gt;)(firecracker-ci/$CI_VERSION/$ARCH/ubuntu-[0-9]+\.[0-9]+\.squashfs)(?=&lt;/Key&gt;)" \
+<pre>rootfs_s3_path=$(curl -fsSL "$S3?list-type=2&amp;prefix=${CI_ARTIFACTS_PREFIX}${ARCH}/ubuntu-" \
+    | grep -oP "(?&lt;=&lt;Key&gt;)(${CI_ARTIFACTS_PREFIX}${ARCH}/ubuntu-[0-9]+\.[0-9]+\.squashfs)(?=&lt;/Key&gt;)" \
     | sort -V | tail -1)
-: "${rootfs_s3_path:?No Ubuntu rootfs found for $CI_VERSION on $ARCH}"
-ubuntu_version=$(basename "$rootfs_s3_path" .squashfs | grep <span class="flag">-oE</span> '[0-9]+\.[0-9]+')
-wget <span class="flag">-O</span> "ubuntu-$ubuntu_version.squashfs.upstream" "https://s3.amazonaws.com/spec.ccfc.min/$rootfs_s3_path"</pre>
+: "${rootfs_s3_path:?No Ubuntu rootfs found in ${CI_ARTIFACTS_PREFIX}}"</pre>
     </div>
     <div class="body-copy">
       <p>The Ubuntu file is a squashfs image, which is a compressed, read-only format. We want a writable root filesystem, so we convert it to ext4 in <a href="#sec-launch" style="color:var(--red); text-decoration:none;">section 7</a>.</p>
