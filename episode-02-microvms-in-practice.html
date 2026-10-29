@@ -705,9 +705,9 @@ CI_VERSION=${latest_version%.*}</pre>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre>kernel_s3_path=$(curl <span class="flag">-fsS</span> "https://spec.ccfc.min.s3.amazonaws.com/?prefix=firecracker-ci/$CI_VERSION/$ARCH/vmlinux-&amp;list-type=2" \
-    | grep <span class="flag">-oP</span> "(?&lt;=&lt;Key&gt;)(firecracker-ci/$CI_VERSION/$ARCH/vmlinux-[0-9]+\.[0-9]+\.[0-9]+)(?=&lt;/Key&gt;)" \
-    | sort <span class="flag">-V</span> | tail -1)
+<pre>kernel_s3_path=$(curl -fsS "https://s3.amazonaws.com/spec.ccfc.min/?prefix=firecracker-ci/$CI_VERSION/$ARCH/vmlinux-&amp;list-type=2" \
+    | grep -oP "(?&lt;=&lt;Key&gt;)(firecracker-ci/$CI_VERSION/$ARCH/vmlinux-[0-9]+\.[0-9]+\.[0-9]+)(?=&lt;/Key&gt;)" \
+    | sort -V | tail -1)
 : "${kernel_s3_path:?No kernel found for $CI_VERSION on $ARCH}"</pre>
     </div>
     <div class="body-copy">
@@ -722,9 +722,9 @@ CI_VERSION=${latest_version%.*}</pre>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre>rootfs_s3_path=$(curl <span class="flag">-fsS</span> "https://spec.ccfc.min.s3.amazonaws.com/?prefix=firecracker-ci/$CI_VERSION/$ARCH/ubuntu-&amp;list-type=2" \
-    | grep <span class="flag">-oP</span> "(?&lt;=&lt;Key&gt;)(firecracker-ci/$CI_VERSION/$ARCH/ubuntu-[0-9]+\.[0-9]+\.squashfs)(?=&lt;/Key&gt;)" \
-    | sort <span class="flag">-V</span> | tail -1)
+<pre>rootfs_s3_path=$(curl -fsS "https://s3.amazonaws.com/spec.ccfc.min/?prefix=firecracker-ci/$CI_VERSION/$ARCH/ubuntu-&amp;list-type=2" \
+    | grep -oP "(?&lt;=&lt;Key&gt;)(firecracker-ci/$CI_VERSION/$ARCH/ubuntu-[0-9]+\.[0-9]+\.squashfs)(?=&lt;/Key&gt;)" \
+    | sort -V | tail -1)
 : "${rootfs_s3_path:?No Ubuntu rootfs found for $CI_VERSION on $ARCH}"
 ubuntu_version=$(basename "$rootfs_s3_path" .squashfs | grep <span class="flag">-oE</span> '[0-9]+\.[0-9]+')
 wget <span class="flag">-O</span> "ubuntu-$ubuntu_version.squashfs.upstream" "https://s3.amazonaws.com/spec.ccfc.min/$rootfs_s3_path"</pre>
