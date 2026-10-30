@@ -927,7 +927,32 @@ cat /etc/resolv.conf</pre>
     </div>
     <div class="step-label">Preparing the agent-uvm disk</div>
     <div class="body-copy">
-      <p>Build the agent-uvm disk the same way as upf-uvm: unpack the same Ubuntu root filesystem, create a new SSH key, and build a 6 GB ext4 image named <code>agent-uvm.ext4</code>.</p>
+      <p>Build the agent-uvm disk the same way as upf-uvm: unpack the same Ubuntu root filesystem into its own folder, add a new SSH key, and pack the result into a 6 GB ext4 file named <code>agent-uvm.ext4</code>. The commands below repeat the upf-uvm steps with agent-uvm names and the smaller size.</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
+<pre>MICROVMS="$HOME/Desktop/microVMs"
+KR="$MICROVMS/kernel_rootfs"
+
+# Unpack the Ubuntu root filesystem into a normal folder
+sudo unsquashfs -d "$KR/squashfs-agent" "$(ls "$KR"/ubuntu-*.squashfs.upstream | tail -1)"
+
+# Create an SSH key pair. The private key stays on the host, the public key goes into the image
+ssh-keygen -t ed25519 -f "$KR/agent-uvm-key" -N ""
+
+# Install the public key where the SSH server looks for it
+sudo mkdir -p "$KR/squashfs-agent/root/.ssh"
+sudo cp "$KR/agent-uvm-key.pub" "$KR/squashfs-agent/root/.ssh/authorized_keys"
+sudo chmod 700 "$KR/squashfs-agent/root/.ssh"
+sudo chmod 600 "$KR/squashfs-agent/root/.ssh/authorized_keys"
+
+# Create a 6 GB sparse file and fill it with the folder contents as an ext4 filesystem
+truncate -s 6G "$KR/agent-uvm.ext4"
+sudo mkfs.ext4 -d "$KR/squashfs-agent" -F "$KR/agent-uvm.ext4"
+</pre>
+    </div>
+    <div class="body-copy">
+      <p>The private key stays on the host. Only the public key goes into the image.</p>
     </div>
     <div class="step-label">Starting the Firecracker process for agent-uvm</div>
     <div class="body-copy">
