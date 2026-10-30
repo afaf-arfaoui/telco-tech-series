@@ -779,7 +779,7 @@ for TAP in "$TAP_UPF" "$TAP_AGENT"; do
   sudo ip link set dev "$TAP" master "$BR_DEV"
 done
 
-ip -br link show br0 tap0 tap1</pre>
+ip -br link | grep -E 'br0|tap0|tap1'</pre>
     </div>
     <div class="body-copy">
       <p>Each of the three interfaces shows <code>UP</code> with <code>NO-CARRIER</code> and <code>state DOWN</code>. That is expected. The interfaces exist, but nothing is connected to them until Firecracker starts the microVMs.</p>
