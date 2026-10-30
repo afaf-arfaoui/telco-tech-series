@@ -747,18 +747,6 @@ wget <span class="flag">-O</span> "ubuntu-$ubuntu_version.squashfs.upstream" "ht
     <div class="body-copy">
       <p>In this section we set up the host side of the lab network. We first create the bridge and the TAP devices, then add the NAT rules that let the microVMs reach the Internet. Nothing is connected yet: the microVMs attach to these interfaces when they start in <a href="#sec-launch" style="color:var(--red); text-decoration:none;">section 7</a>.</p>
     </div>
-    <div class="step-label">Keeping NetworkManager away from the new interfaces</div>
-    <div class="body-copy">
-      <p>Ubuntu's NetworkManager manages the network connections on your laptop, and it tries to take over any interface it finds. Without this step, it could reconfigure or bring down the bridge and TAP devices we create by hand. The configuration file written below marks them as unmanaged, so NetworkManager leaves them alone.</p>
-    </div>
-    <div class="codebox">
-      <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre>sudo tee /etc/NetworkManager/conf.d/99-microvm-unmanaged.conf &gt;/dev/null &lt;&lt;'EOF'
-[keyfile]
-unmanaged-devices=interface-name:br0;interface-name:tap*
-EOF
-sudo systemctl reload NetworkManager</pre>
-    </div>
     <div class="step-label">Creating the bridge and the TAP devices</div>
     <div class="body-copy">
       <p>The commands first remove any leftovers from a previous attempt, so the block can be run again safely. Then they create <code>br0</code>, give it the gateway address, and create one TAP device per microVM, attached to the bridge.</p>
@@ -913,7 +901,14 @@ sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
     </div>
     <div class="step-label">Logging in to upf-uvm</div>
     <div class="body-copy">
-      <p><span style="color:#d6336c; font-weight:600;">When the first terminal shows a login prompt, log in on that console as <code>root</code>. The getting-started guide uses <code>root</code> for both the login and the password. Then check that the address, route, and DNS servers were set at boot.</span></p>
+      <p><span style="color:#d6336c; font-weight:600;">When the first terminal shows a login prompt, log in on that console as <code>root</code>. The getting-started guide uses <code>root</code> for both the login and the password. Then remove the extra address and check that the route and DNS servers were set at boot.</span></p>
+    </div>
+    <div class="body-copy">
+      <p>The startup script of the CI image also adds a <code>/30</code> address to <code>eth0</code>. The boot arguments already set the correct address, so remove the extra one:</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>guest shell (upf-uvm)</span><button class="copy-btn">Copy</button></div>
+<pre>ip addr del 172.16.0.2/30 dev eth0</pre>
     </div>
     <div class="codebox">
       <div class="code-head"><span>guest shell (upf-uvm)</span><button class="copy-btn">Copy</button></div>
@@ -1006,6 +1001,13 @@ sudo curl -X PUT --unix-socket "$API_SOCKET_AGENT" \
     <div class="step-label">Logging in to agent-uvm</div>
     <div class="body-copy">
       <p>Log in on the console as <code>root</code>. The address is already set by the boot arguments, so check it with the command below.</p>
+    </div>
+    <div class="body-copy">
+      <p>The startup script of the CI image also adds a <code>/30</code> address to <code>eth0</code>. The boot arguments already set the correct address, so remove the extra one:</p>
+    </div>
+    <div class="codebox">
+      <div class="code-head"><span>guest shell (agent-uvm)</span><button class="copy-btn">Copy</button></div>
+<pre>ip addr del 172.16.0.3/30 dev eth0</pre>
     </div>
     <div class="codebox">
       <div class="code-head"><span>guest shell (agent-uvm)</span><button class="copy-btn">Copy</button></div>
