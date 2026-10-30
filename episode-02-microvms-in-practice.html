@@ -822,6 +822,8 @@ sudo mkdir -p "$KR/squashfs-upf/root/.ssh"
 sudo cp "$KR/upf-uvm-key.pub" "$KR/squashfs-upf/root/.ssh/authorized_keys"
 sudo chmod 700 "$KR/squashfs-upf/root/.ssh"
 sudo chmod 600 "$KR/squashfs-upf/root/.ssh/authorized_keys"
+sudo rm -f "$KR/squashfs-upf/etc/resolv.conf"
+printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" | sudo tee "$KR/squashfs-upf/etc/resolv.conf" &gt;/dev/null
 
 # Create an 8 GB sparse file and fill it with the folder contents as an ext4 filesystem
 truncate -s 8G "$KR/upf-uvm.ext4"
@@ -945,6 +947,8 @@ sudo mkdir -p "$KR/squashfs-agent/root/.ssh"
 sudo cp "$KR/agent-uvm-key.pub" "$KR/squashfs-agent/root/.ssh/authorized_keys"
 sudo chmod 700 "$KR/squashfs-agent/root/.ssh"
 sudo chmod 600 "$KR/squashfs-agent/root/.ssh/authorized_keys"
+sudo rm -f "$KR/squashfs-agent/etc/resolv.conf"
+printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" | sudo tee "$KR/squashfs-agent/etc/resolv.conf" &gt;/dev/null
 
 # Create a 6 GB sparse file and fill it with the folder contents as an ext4 filesystem
 truncate -s 6G "$KR/agent-uvm.ext4"
