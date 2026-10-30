@@ -584,14 +584,14 @@ df <span class="flag">-h</span> /opt 2&gt;/dev/null || df <span class="flag">-h<
         <tr><td>RAM</td><td>4 GiB</td><td>2 GiB</td></tr>
         <tr><td>Root disk</td><td>8 GB ext4 (sparse), built from the Firecracker CI Ubuntu rootfs</td><td>6 GB ext4 (sparse), built from the Firecracker CI Ubuntu rootfs</td></tr>
         <tr><td>Network</td><td>1 virtio-net (N3, N4, and N6 share it. A second is optional to separate N3 and N6)</td><td>1 virtio-net</td></tr>
-        <tr><td>Kernel</td><td><span style="color:#d6336c; font-weight:600;">Firecracker CI Linux 6.1 (BPF and BTF options to be verified)</span></td><td>Firecracker CI Linux 6.1</td></tr>
+        <tr><td>Kernel</td><td><span style="color:#d6336c; font-weight:600;">Firecracker CI Linux 6.18 (BPF and BTF options to be verified)</span></td><td>Firecracker CI Linux 6.18</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="body-copy" style="margin-top:0;">
     <p>The upf-uvm carries most of the load. It gets 4 GiB of RAM, two vCPUs, and an 8 GB root disk. It uses the 
-      Firecracker CI 6.1 kernel, <span style="color:#d6336c; font-weight:600;">and we will check whether that kernel has the BPF and BTF options the eUPF’s eBPF and XDP programs need. If it 
+      Firecracker CI 6.18 kernel, <span style="color:#d6336c; font-weight:600;">and we will check whether that kernel has the BPF and BTF options the eUPF’s eBPF and XDP programs need. If it 
       doesn’t, we will build a custom kernel.</span> The agent microVM is much lighter since the Claude model runs in the cloud, so the microVM only makes API 
       calls and watches the eUPF. It gets 2 GiB of RAM, two vCPUs, and a 6 GB root disk.</p>
     <p>Together, the two microVMs use 6 GiB of the 32 GiB on this laptop and under a third of its 22 CPU threads. That leaves plenty of memory for the host OS. If your machine has less memory, start with smaller microVMs and increase the values only if they struggle. Keep at least a quarter of your host RAM free for the host OS.</p>
@@ -664,7 +664,7 @@ ip route show default</pre>
   <section class="tracked" id="sec-install">
   <div class="section-num">4. Installing Firecracker</div>
     <div class="body-copy" style="margin-top:0;">
-      <p>Firecracker publishes ready-made binaries on its GitHub releases page<a class="ref-link" href="#ref-2">[2]</a>. The commands below find the latest release and download the version that matches your processor:</p>
+      <p>Firecracker publishes ready-made binaries on its GitHub releases page<a class="ref-link" href="#ref-2">[2]</a>. The commands below find the latest release and download the version that matches your processor into <code>~/Desktop/microVMs/firecracker</code>. The whole lab lives under <code>~/Desktop/microVMs</code>: the Firecracker release goes into <code>firecracker</code>, and the kernel, root filesystem, and disk images go into <code>kernel_rootfs</code>:</p>
     </div>
 
     <div class="codebox">
@@ -673,9 +673,10 @@ ip route show default</pre>
 release_url="https://github.com/firecracker-microvm/firecracker/releases"
 latest=$(basename "$(curl <span class="flag">-fsSLI</span> <span class="flag">-o</span> /dev/null <span class="flag">-w</span> '%{url_effective}' "${release_url}/latest")")
 : "${latest:?Could not find the latest release. Check your internet connection and try again.}"
-sudo mkdir <span class="flag">-p</span> /firecracker
+MICROVMS="$HOME/Desktop/microVMs"
+mkdir <span class="flag">-p</span> "$MICROVMS/firecracker"
 curl <span class="flag">-fsSL</span> "${release_url}/download/${latest}/firecracker-${latest}-${ARCH}.tgz" \
-| sudo tar <span class="flag">-xz</span> <span class="flag">-C</span> /firecracker</pre>
+| tar <span class="flag">-xz</span> <span class="flag">-C</span> "$MICROVMS/firecracker"</pre>
     </div>
 
     <div class="body-copy">
@@ -684,7 +685,7 @@ curl <span class="flag">-fsSL</span> "${release_url}/download/${latest}/firecrac
         <li><code>firecracker</code> is the VMM itself.</li>
         <li><code>jailer</code> is the extra security layer we mentioned in <a href="episode-01-what-is-a-microvm.html" style="color:var(--red); text-decoration:none;">episode 01</a>. It runs Firecracker inside Linux isolation features such as namespaces and cgroups, which keeps each microVM contained when several workloads share one host. It is recommended for production, but we will not use it.</li>
       </ul>
-      <p>To see exactly what the archive contains, including any subfolders, run <code>ls -R /firecracker</code>.</p>
+      <p>To see exactly what the archive contains, including any subfolders, run <code>ls -R ~/Desktop/microVMs/firecracker</code>.</p>
     </div>
   </section>
   <section class="tracked" id="sec-artifacts">
@@ -695,7 +696,11 @@ curl <span class="flag">-fsSL</span> "${release_url}/download/${latest}/firecrac
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre>ARCH="$(uname -m)"
+<pre>MICROVMS="$HOME/Desktop/microVMs"
+KR="$MICROVMS/kernel_rootfs"
+mkdir -p "$KR"
+cd "$KR"
+ARCH="$(uname -m)"
 S3="https://s3.amazonaws.com/spec.ccfc.min"
 
 CI_ARTIFACTS_PREFIX=$(curl -fsSL "$S3?list-type=2&amp;prefix=firecracker-ci/&amp;delimiter=/" \
@@ -734,7 +739,7 @@ wget <span class="flag">-O</span> "ubuntu-$ubuntu_version.squashfs.upstream" "ht
     </div>
     <div class="body-copy">
       <p>The Ubuntu file is a squashfs image, which is a compressed, read-only format. We want a writable root filesystem, so we convert it to ext4 in <a href="#sec-launch" style="color:var(--red); text-decoration:none;">section 7</a>.</p>
-      <p>When this step finishes, you should have a <code>vmlinux-*</code> file and an <code>ubuntu-*.squashfs.upstream</code> file in the current folder.</p>
+      <p>When this step finishes, you should have a <code>vmlinux-*</code> file and an <code>ubuntu-*.squashfs.upstream</code> file in <code>~/Desktop/microVMs/kernel_rootfs</code>.</p>
     </div>
   </section>
   <section class="tracked" id="sec-network">
@@ -807,29 +812,33 @@ sudo iptables -A FORWARD -i "$HOST_IFACE" -o br0 -m conntrack --ctstate RELATED,
   <section class="tracked" id="sec-launch">
   <div class="section-num">7. Launching the first microVM</div>
     <div class="body-copy">
-      <p>The first microVM, <code>upf-uvm</code>, runs the eUPF. It uses the kernel and root filesystem downloaded in <a href="#sec-artifacts" style="color:var(--red); text-decoration:none;">section 5</a>. The eUPF requires Linux 5.15 or newer, so we use the 6.1 kernel. <span style="color:#d6336c; font-weight:600;">We still need to confirm that this kernel enables the BPF and BTF options the eUPF uses, and we will check that before deploying the eUPF itself.</span></p>
+      <p>The first microVM, <code>upf-uvm</code>, runs the eUPF. It uses the kernel and root filesystem downloaded in <a href="#sec-artifacts" style="color:var(--red); text-decoration:none;">section 5</a>. The eUPF requires Linux 5.15 or newer, so we use the 6.18 kernel. <span style="color:#d6336c; font-weight:600;">We still need to confirm that this kernel enables the BPF and BTF options the eUPF uses, and we will check that before deploying the eUPF itself.</span></p>
     </div>
     <div class="step-label">Preparing the upf-uvm disk</div>
     <div class="body-copy">
-      <p>The CI root filesystem is a read-only SquashFS image with no SSH keys. We connect to each microVM from the host over SSH, which is easier than typing in the serial console, and the SSH server accepts a login only from a key it trusts. Firecracker needs an ext4 image, so we unpack the SquashFS, install a public key for SSH, and pack the result into an 8 GB ext4 file. The file is sparse, so it only uses host disk space as data is written. This step uses the Ubuntu version set in <a href="#sec-artifacts" style="color:var(--red); text-decoration:none;">section 5</a>, so run it in the same terminal.</p>
+      <p>The CI root filesystem is a read-only SquashFS image with no SSH keys. We connect to each microVM from the host over SSH, which is easier than typing in the serial console, and the SSH server accepts a login only from a key it trusts. Firecracker needs an ext4 image, so we unpack the SquashFS, install a public key for SSH, and pack the result into an 8 GB ext4 file. The file is sparse, so it only uses host disk space as data is written.</p>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Unpack the Ubuntu root filesystem into a normal folder
-sudo unsquashfs -d squashfs-upf "ubuntu-${ubuntu_version}.squashfs.upstream"
+<pre>MICROVMS="$HOME/Desktop/microVMs"
+KR="$MICROVMS/kernel_rootfs"
+
+# Unpack the Ubuntu root filesystem into a normal folder
+sudo unsquashfs -d "$KR/squashfs-upf" "$(ls "$KR"/ubuntu-*.squashfs.upstream | tail -1)"
 
 # Create an SSH key pair. The private key stays on the host, the public key goes into the image
-ssh-keygen -t ed25519 -f upf-uvm-key -N ""
+ssh-keygen -t ed25519 -f "$KR/upf-uvm-key" -N ""
 
 # Install the public key where the SSH server looks for it
-sudo mkdir -p squashfs-upf/root/.ssh
-sudo cp upf-uvm-key.pub squashfs-upf/root/.ssh/authorized_keys
-sudo chmod 700 squashfs-upf/root/.ssh
-sudo chmod 600 squashfs-upf/root/.ssh/authorized_keys
+sudo mkdir -p "$KR/squashfs-upf/root/.ssh"
+sudo cp "$KR/upf-uvm-key.pub" "$KR/squashfs-upf/root/.ssh/authorized_keys"
+sudo chmod 700 "$KR/squashfs-upf/root/.ssh"
+sudo chmod 600 "$KR/squashfs-upf/root/.ssh/authorized_keys"
 
 # Create an 8 GB sparse file and fill it with the folder contents as an ext4 filesystem
-truncate -s 8G upf-uvm.ext4
-sudo mkfs.ext4 -d squashfs-upf -F upf-uvm.ext4
+truncate -s 8G "$KR/upf-uvm.ext4"
+sudo mkfs.ext4 -d "$KR/squashfs-upf" -F "$KR/upf-uvm.ext4"
+
 </pre>
     </div>
     <div class="body-copy">
@@ -841,11 +850,12 @@ sudo mkfs.ext4 -d squashfs-upf -F upf-uvm.ext4
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Remove the socket file left by an earlier run, if there is one
+<pre>MICROVMS="$HOME/Desktop/microVMs"
+# Remove the socket file left by an earlier run, if there is one
 sudo rm -f /tmp/firecracker-upf.socket
 
 # Find the Firecracker binary extracted in section 4
-FC_BIN=$(ls /firecracker/release-*/firecracker-*-$(uname -m) | tail -1)
+FC_BIN=$(ls "$MICROVMS"/firecracker/release-*/firecracker-*-$(uname -m) | tail -1)
 
 # Start the Firecracker process, which creates the socket that the next commands use
 sudo "$FC_BIN" --api-sock /tmp/firecracker-upf.socket
@@ -857,16 +867,18 @@ sudo "$FC_BIN" --api-sock /tmp/firecracker-upf.socket
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Variables used by the commands below
+<pre>MICROVMS="$HOME/Desktop/microVMs"
+KR="$MICROVMS/kernel_rootfs"
+# Variables used by the commands below
 API_SOCKET_UPF="/tmp/firecracker-upf.socket"
-KERNEL="./$(ls vmlinux-* | tail -1)"
+KERNEL="$(ls "$KR"/vmlinux-* | tail -1)"
 KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off ip=172.16.0.2::172.16.0.1:255.255.255.0::eth0:off:1.1.1.1:8.8.8.8"
-ROOTFS_UPF="./upf-uvm.ext4"
+ROOTFS_UPF="$KR/upf-uvm.ext4"
 FC_MAC_UPF="06:00:AC:10:00:02"
 
 # Log file for Firecracker
 sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
-  --data '{"log_path": "./firecracker-upf.log", "level": "Debug", "show_level": true, "show_log_origin": true}' \
+  --data "{\"log_path\": \"$KR/firecracker-upf.log\", \"level\": \"Debug\", \"show_level\": true, \"show_log_origin\": true}" \
   http://localhost/logger
 
 # 2 vCPUs, 4 GiB of RAM, and simultaneous multithreading off
@@ -910,7 +922,7 @@ ip route show default
 cat /etc/resolv.conf</pre>
     </div>
     <div class="body-copy">
-      <p>Once the checks pass, you can connect from the host with <code>ssh -i upf-uvm-key root@172.16.0.2</code>.</p>
+      <p>Once the checks pass, you can connect from the host with <code>ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key root@172.16.0.2</code>.</p>
     </div>
   </section>
   <section class="tracked" id="sec-second">
@@ -928,15 +940,17 @@ cat /etc/resolv.conf</pre>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Variables for the agent-uvm boot, which carry the agent's address
-KERNEL="./$(ls vmlinux-* | tail -1)"
+<pre>MICROVMS="$HOME/Desktop/microVMs"
+KR="$MICROVMS/kernel_rootfs"
+# Variables for the agent-uvm boot, which carry the agent's address
+KERNEL="$(ls "$KR"/vmlinux-* | tail -1)"
 KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off ip=172.16.0.3::172.16.0.1:255.255.255.0::eth0:off:1.1.1.1:8.8.8.8"
 
 # Remove the socket file left by an earlier run, if there is one
 sudo rm -f /tmp/firecracker-agent.socket
 
 # Find the Firecracker binary extracted in section 4
-FC_BIN=$(ls /firecracker/release-*/firecracker-*-$(uname -m) | tail -1)
+FC_BIN=$(ls "$MICROVMS"/firecracker/release-*/firecracker-*-$(uname -m) | tail -1)
 
 # Start the Firecracker process, which creates the socket that the next commands use
 sudo "$FC_BIN" --api-sock /tmp/firecracker-agent.socket
@@ -948,15 +962,18 @@ sudo "$FC_BIN" --api-sock /tmp/firecracker-agent.socket
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Variables used by the commands below
+<pre>MICROVMS="$HOME/Desktop/microVMs"
+KR="$MICROVMS/kernel_rootfs"
+KERNEL="$(ls "$KR"/vmlinux-* | tail -1)"
+# Variables used by the commands below
 KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off ip=172.16.0.3::172.16.0.1:255.255.255.0::eth0:off:1.1.1.1:8.8.8.8"
 API_SOCKET_AGENT="/tmp/firecracker-agent.socket"
-ROOTFS_AGENT="./agent-uvm.ext4"
+ROOTFS_AGENT="$KR/agent-uvm.ext4"
 FC_MAC_AGENT="06:00:AC:10:00:03"
 
 # Log file for Firecracker
 sudo curl -X PUT --unix-socket "$API_SOCKET_AGENT" \
-  --data '{"log_path": "./firecracker-agent.log", "level": "Debug", "show_level": true, "show_log_origin": true}' \
+  --data "{\"log_path\": \"$KR/firecracker-agent.log\", \"level\": \"Debug\", \"show_level\": true, \"show_log_origin\": true}" \
   http://localhost/logger
 
 # 2 vCPUs, 2 GiB of RAM, and simultaneous multithreading off
