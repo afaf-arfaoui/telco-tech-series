@@ -784,8 +784,7 @@ for TAP in "$TAP_UPF" "$TAP_AGENT"; do
   sudo ip link set dev "$TAP" master "$BR_DEV"
 done
 
-ip -br link | grep -E 'br0|tap0|tap1'
-sudo grep -rl "fcnet\|172\.16" ~/Desktop/microVMs/kernel_rootfs/squashfs-upf/etc ~/Desktop/microVMs/kernel_rootfs/squashfs-upf/usr 2>/dev/null</pre>
+ip -br link | grep -E 'br0|tap0|tap1'</pre>
     </div>
     <div class="body-copy">
       <p>Each of the three interfaces shows <code>UP</code> with <code>NO-CARRIER</code> and <code>state DOWN</code>. That is expected. The interfaces exist, but nothing is connected to them until Firecracker starts the microVMs.</p>
