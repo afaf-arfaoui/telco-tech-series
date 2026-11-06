@@ -1078,7 +1078,18 @@ sudo iptables -S FORWARD</pre>
     <div class="step-label"></div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre></pre>
+<pre>echo "== 1. Does the eUPF source use BTF?"
+[ -d ~/Desktop/microVMs/eupf-src ] || git clone https://github.com/edgecomllc/eupf ~/Desktop/microVMs/eupf-src
+grep -rn "vmlinux\|btf\|bpf2go" ~/Desktop/microVMs/eupf-src --include=*.go --include=*.c --include=*.h --include=Makefile --include=Dockerfile | head -20
+
+echo "== 2. Does the 6.18 Firecracker CI guest config enable BTF?"
+curl -s https://api.github.com/repos/firecracker-microvm/firecracker/contents/resources/guest_configs | grep '"name"' | grep 6.18
+CFG_URL=$(curl -s https://api.github.com/repos/firecracker-microvm/firecracker/contents/resources/guest_configs | grep '"download_url"' | grep 6.18 | head -1 | cut -d'"' -f4)
+echo "$CFG_URL"
+curl -fsSL "$CFG_URL" | grep -E '^(# )?CONFIG_(DEBUG_INFO_BTF|BPF_SYSCALL)'
+
+echo "== 3. Is pahole installed on the host?"
+command -v pahole || echo "pahole missing"</pre>
     </div>
 
     <div class="body-copy">
