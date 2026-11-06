@@ -1089,7 +1089,37 @@ echo "$CFG_URL"
 curl -fsSL "$CFG_URL" | grep -E '^(# )?CONFIG_(DEBUG_INFO_BTF|BPF_SYSCALL)'
 
 echo "== 3. Is pahole installed on the host?"
-command -v pahole || echo "pahole missing"</pre>
+command -v pahole || echo "pahole missing"
+xxxxxxxxxxxxxxxxxxxxx
+afaf-a@afaf-a-XPS:~$ [ -d ~/Desktop/microVMs/eupf-src ] || git clone https://github.com/edgecomllc/eupf ~/Desktop/microVMs/eupf-src
+Cloning into '/home/afaf-a/Desktop/microVMs/eupf-src'...
+remote: Enumerating objects: 7665, done.
+remote: Counting objects: 100% (850/850), done.
+remote: Compressing objects: 100% (362/362), done.
+remote: Total 7665 (delta 633), reused 500 (delta 488), pack-reused 6815 (from 3)
+Receiving objects: 100% (7665/7665), 2.74 MiB | 6.51 MiB/s, done.
+Resolving deltas: 100% (4855/4855), done.
+afaf-a@afaf-a-XPS:~$ grep -rn "vmlinux\|btf\|bpf2go" ~/Desktop/microVMs/eupf-src --include=*.go --include=*.c --include=*.h --include=Makefile --include=Dockerfile | head -20
+/home/afaf-a/Desktop/microVMs/eupf-src/cmd/ebpf/objects.go:26://go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cflags "$BPF_CFLAGS" -target bpf IpEntrypoint 	xdp/n3n6_entrypoint.c -- -I. -O2 -Wall -g
+/home/afaf-a/Desktop/microVMs/eupf-src/cmd/ebpf/objects.go:27://go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target bpf ZeroEntrypoint 	xdp/zero_entrypoint.c -- -I. -O2 -Wall
+/home/afaf-a/Desktop/microVMs/eupf-src/cmd/ebpf/objects.go:28://go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target bpf N3Entrypoint 	xdp/n3_entrypoint.c -- -I. -O2 -Wall
+/home/afaf-a/Desktop/microVMs/eupf-src/cmd/ebpf/objects.go:29://go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target bpf N6Entrypoint 	xdp/n6_entrypoint.c -- -I. -O2 -Wall
+afaf-a@afaf-a-XPS:~$ echo "== 2. Does the 6.18 Firecracker CI guest config enable BTF?"
+== 2. Does the 6.18 Firecracker CI guest config enable BTF?
+afaf-a@afaf-a-XPS:~$ curl -s https://api.github.com/repos/firecracker-microvm/firecracker/contents/resources/guest_configs | grep '"name"' | grep 6.18
+    "name": "microvm-kernel-ci-aarch64-6.18.config",
+    "name": "microvm-kernel-ci-x86_64-6.18.config",
+afaf-a@afaf-a-XPS:~$ CFG_URL=$(curl -s https://api.github.com/repos/firecracker-microvm/firecracker/contents/resources/guest_configs | grep '"download_url"' | grep 6.18 | head -1 | cut -d'"' -f4)
+afaf-a@afaf-a-XPS:~$ echo "$CFG_URL"
+https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/resources/guest_configs/microvm-kernel-ci-aarch64-6.18.config
+afaf-a@afaf-a-XPS:~$ curl -fsSL "$CFG_URL" | grep -E '^(# )?CONFIG_(DEBUG_INFO_BTF|BPF_SYSCALL)'
+CONFIG_BPF_SYSCALL=y
+afaf-a@afaf-a-XPS:~$ ^C
+afaf-a@afaf-a-XPS:~$ echo "== 3. Is pahole installed on the host?"
+== 3. Is pahole installed on the host?
+afaf-a@afaf-a-XPS:~$ command -v pahole || echo "pahole missing"
+pahole missing
+</pre>
     </div>
 
     <div class="body-copy">
