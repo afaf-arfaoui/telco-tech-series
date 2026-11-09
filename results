@@ -1,26 +1,3 @@
-grep -rn "n3_address\|N3_ADDRESS" ~/Desktop/microVMs/eupf-src --exclude-dir=.git | head -10
-/home/afaf-a/Desktop/microVMs/eupf-src/.deploy/helm/eupf/values.yaml:66:  UPF_N3_ADDRESS: $(MY_POD_IP)
-/home/afaf-a/Desktop/microVMs/eupf-src/.deploy/helm/eupf/README.md:40:The chart injects a working default set of `UPF_*` variables (see `defaultEnv` in `values.yaml`), where `UPF_PFCP_NODE_ID` and `UPF_N3_ADDRESS` default to the pod IP. Override any of them via the `env` map:
-/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/free5gc-ulcl/eupf-b.yaml:45:        n3_address: 10.100.50.233
-/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/free5gc-ulcl/eupf-b.yaml:50:  # UPF_N3_ADDRESS: 10.100.50.233
-/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices/values/eupf2.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
-/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices/values/eupf.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
-/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-compose/docker-compose.yaml:190:      UPF_N3_ADDRESS: "172.20.0.100"
-/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices-UE2pdu/values/eupf2.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
-/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices-UE2pdu/values/eupf.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
-/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/srsran-gnb/values/eupf.yaml:23:  UPF_N3_ADDRESS: $(MY_POD_IP)
+cat ~/Desktop/microVMs/eupf-src/entrypoint.sh 2>/dev/null || find ~/Desktop/microVMs/eupf-src -name entrypoint.sh -not -path '*/.git/*'
 
-
-from agent-uvm
-curl -i http://172.16.0.2:8080/api/v1/health
-HTTP/1.1 200 OK
-Content-Type: application/json; charset=utf-8
-Date: Mon, 09 Nov 2026 11:09:02 GMT
-Content-Length: 4
-
-curl -s http://172.16.0.2:9090/metrics | head -5
-# HELP go_gc_duration_seconds A summary of the wall-time pause (stop-the-world) duration in garbage collection cycles.
-# TYPE go_gc_duration_seconds summary
-go_gc_duration_seconds{quantile="0"} 7.9218e-05
-go_gc_duration_seconds{quantile="0.25"} 7.9218e-05
-go_gc_duration_seconds{quantile="0.5"} 9.2169e-05
+/usr/local/bin/eupf --help 2>&1 | head -40
