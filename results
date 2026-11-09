@@ -1,4 +1,2 @@
-grep -E '^CONFIG_(DEBUG_INFO|DEBUG_INFO_DWARF5|DEBUG_INFO_BTF)=' .config
-CONFIG_DEBUG_INFO=y
-CONFIG_DEBUG_INFO_DWARF5=y
-CONFIG_DEBUG_INFO_BTF=y
+cp "$SRC/vmlinux" ~/Desktop/microVMs/kernel_rootfs/vmlinux-6.18-btf
+ls -lh ~/Desktop/microVMs/kernel_rootfs/vmlinux-*
