@@ -1,7 +1,43 @@
-afaf-a@afaf-a-XPS:~/Desktop$ grep -rn "BPF_ENABLE_LOG" ~/Desktop/microVMs/eupf-src --exclude-dir=.git | head -10
-/home/afaf-a/Desktop/microVMs/eupf-src/.github/workflows/build.yml:64:            BPF_ENABLE_LOG=${{ fromJSON('["0", "1"]')[github.event.inputs.debug == 'true'] }}
-/home/afaf-a/Desktop/microVMs/eupf-src/README.md:276:You can also define several build arguments to configure eUPF image: `docker build -t local/eupf:latest --build-arg BPF_ENABLE_LOG=1 --build-arg BPF_ENABLE_ROUTE_CACHE=1 .`
-/home/afaf-a/Desktop/microVMs/eupf-src/Dockerfile:15:ARG BPF_ENABLE_LOG "0"
-/home/afaf-a/Desktop/microVMs/eupf-src/Dockerfile:18:    && if [ "$BPF_ENABLE_LOG" = "1" ]; then BPF_CFLAGS="$BPF_CFLAGS -DENABLE_LOG"; fi \
-afaf-a@afaf-a-XPS:~/Desktop$ 
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ grep -E '^CONFIG_(DEBUG_INFO_BTF|KPROBE_EVENTS)=' "$SRC/.config"
+CONFIG_KPROBE_EVENTS=y
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ command -v pahole || echo "pahole missing"
+/usr/bin/pahole
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ scripts/config --enable DEBUG_INFO --enable DEBUG_INFO_BTF
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ make olddefconfig
+#
+# configuration written to .config
+#
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ grep -E '^CONGIG_(DEBUG_INFO|DEBUG_INFO_BTF)=' .config
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ grep -E '^CONFIG_(DEBUG_INFO|DEBUG_INFO_BTF)=' .config
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ grep -A6 '^config DEBUG_INFO_BTF' Kconfig
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ pahole --version
+v1.30
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ pwd
+/home/afaf-a/Desktop/microVMs/linux-6.18.62
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ ls -l .config
+-rw-rw-r-- 1 afaf-a afaf-a 103858 Nov  9 10:47 .config
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ grep -n 'DEBUG_INFO' .config | head -20
+3671:CONFIG_DEBUG_INFO_NONE=y
+3672:# CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT is not set
+3673:# CONFIG_DEBUG_INFO_DWARF4 is not set
+3674:# CONFIG_DEBUG_INFO_DWARF5 is not set
+afaf-a@afaf-a-XPS:~/Desktop/microVMs/linux-6.18.62$ grep -A8 '^config DEBUG_INFO_BTF' lib/Kconfig.debug
+config DEBUG_INFO_BTF
+	bool "Generate BTF type information"
+	depends on !DEBUG_INFO_SPLIT && !DEBUG_INFO_REDUCED
+	depends on !GCC_PLUGIN_RANDSTRUCT || COMPILE_TEST
+	depends on BPF_SYSCALL
+	depends on PAHOLE_VERSION >= 116
+	depends on DEBUG_INFO_DWARF4 || PAHOLE_VERSION >= 121
+	# pahole uses elfutils, which does not have support for Hexagon relocations
+	depends on !HEXAGON
+--
+config DEBUG_INFO_BTF_MODULES
+	bool "Generate BTF type information for kernel modules"
+	default y
+	depends on DEBUG_INFO_BTF && MODULES && PAHOLE_HAS_SPLIT_BTF
+	help
+	  Generate compact split BTF type information for kernel modules.
 
+config MODULE_ALLOW_BTF_MISMATCH
+	bool "Allow loading modules with non-matching BTF type info"
