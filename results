@@ -1,4 +1,4 @@
-cd "$SRC"
-scripts/config --disable DEBUG_INFO_NONE --enable DEBUG_INFO --enable DEBUG_INFO_DWARF5 --enable DEBUG_INFO_BTF
-make olddefconfig
 grep -E '^CONFIG_(DEBUG_INFO|DEBUG_INFO_DWARF5|DEBUG_INFO_BTF)=' .config
+CONFIG_DEBUG_INFO=y
+CONFIG_DEBUG_INFO_DWARF5=y
+CONFIG_DEBUG_INFO_BTF=y
