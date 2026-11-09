@@ -9,3 +9,18 @@ grep -rn "n3_address\|N3_ADDRESS" ~/Desktop/microVMs/eupf-src --exclude-dir=.git
 /home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices-UE2pdu/values/eupf2.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
 /home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices-UE2pdu/values/eupf.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
 /home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/srsran-gnb/values/eupf.yaml:23:  UPF_N3_ADDRESS: $(MY_POD_IP)
+
+
+from agent-uvm
+curl -i http://172.16.0.2:8080/api/v1/health
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Mon, 09 Nov 2026 11:09:02 GMT
+Content-Length: 4
+
+curl -s http://172.16.0.2:9090/metrics | head -5
+# HELP go_gc_duration_seconds A summary of the wall-time pause (stop-the-world) duration in garbage collection cycles.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 7.9218e-05
+go_gc_duration_seconds{quantile="0.25"} 7.9218e-05
+go_gc_duration_seconds{quantile="0.5"} 9.2169e-05
