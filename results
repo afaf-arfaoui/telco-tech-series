@@ -1,2 +1,38 @@
-cp "$SRC/vmlinux" ~/Desktop/microVMs/kernel_rootfs/vmlinux-6.18-btf
-ls -lh ~/Desktop/microVMs/kernel_rootfs/vmlinux-*
+MICROVMS="$HOME/Desktop/microVMs"
+sudo rm -f /tmp/firecracker-upf.socket
+FC_BIN=$(ls "$MICROVMS"/firecracker/release-*/firecracker-*-$(uname -m) | tail -1)
+sudo "$FC_BIN" --api-sock /tmp/firecracker-upf.socket
+
+
+MICROVMS="$HOME/Desktop/microVMs"
+KR="$MICROVMS/kernel_rootfs"
+API_SOCKET_UPF="/tmp/firecracker-upf.socket"
+KERNEL="$KR/vmlinux-6.18-btf"
+KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off ip=172.16.0.2::172.16.0.1:255.255.255.0::eth0:off:1.1.1.1:8.8.8.8"
+ROOTFS_UPF="$KR/upf-uvm.ext4"
+FC_MAC_UPF="06:00:AC:10:00:02"
+
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data '{"log_path": "'"$KR"'/firecracker-upf.log", "level": "Debug", "show_level": true, "show_log_origin": true}' \
+  http://localhost/logger
+
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data '{"vcpu_count": 2, "mem_size_mib": 4096, "smt": false}' \
+  http://localhost/machine-config
+
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data "{\"kernel_image_path\": \"${KERNEL}\", \"boot_args\": \"${KERNEL_BOOT_ARGS}\"}" \
+  http://localhost/boot-source
+
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data "{\"drive_id\": \"rootfs\", \"path_on_host\": \"${ROOTFS_UPF}\", \"is_root_device\": true, \"is_read_only\": false}" \
+  http://localhost/drives/rootfs
+
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data "{\"iface_id\": \"net1\", \"guest_mac\": \"${FC_MAC_UPF}\", \"host_dev_name\": \"tap0\"}" \
+  http://localhost/network-interfaces/net1
+
+sleep 0.015
+sudo curl -X PUT --unix-socket "$API_SOCKET_UPF" \
+  --data '{"action_type": "InstanceStart"}' \
+  http://localhost/actions
