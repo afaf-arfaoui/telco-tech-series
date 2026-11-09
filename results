@@ -1,1 +1,11 @@
 grep -rn "n3_address\|N3_ADDRESS" ~/Desktop/microVMs/eupf-src --exclude-dir=.git | head -10
+/home/afaf-a/Desktop/microVMs/eupf-src/.deploy/helm/eupf/values.yaml:66:  UPF_N3_ADDRESS: $(MY_POD_IP)
+/home/afaf-a/Desktop/microVMs/eupf-src/.deploy/helm/eupf/README.md:40:The chart injects a working default set of `UPF_*` variables (see `defaultEnv` in `values.yaml`), where `UPF_PFCP_NODE_ID` and `UPF_N3_ADDRESS` default to the pod IP. Override any of them via the `env` map:
+/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/free5gc-ulcl/eupf-b.yaml:45:        n3_address: 10.100.50.233
+/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/free5gc-ulcl/eupf-b.yaml:50:  # UPF_N3_ADDRESS: 10.100.50.233
+/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices/values/eupf2.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
+/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices/values/eupf.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
+/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-compose/docker-compose.yaml:190:      UPF_N3_ADDRESS: "172.20.0.100"
+/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices-UE2pdu/values/eupf2.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
+/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/open5gs-with-bgp-and-slices-UE2pdu/values/eupf.yaml:18:  UPF_N3_ADDRESS: $(MY_POD_IP)
+/home/afaf-a/Desktop/microVMs/eupf-src/docs/deployments/srsran-gnb/values/eupf.yaml:23:  UPF_N3_ADDRESS: $(MY_POD_IP)
