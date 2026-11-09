@@ -1,3 +1,87 @@
-/usr/local/bin/eupf --iface eth0 --attach generic --nodeid 172.16.0.2 --n3addr 172.16.0.2 --paddr 172.16.0.2:8805 --loglvl debug
+evel":"debug","time":"2026-11-09T11:15:37Z","message":"Config file not found. Using defaults"}
+{"level":"debug","time":"2026-11-09T11:15:37Z","message":"Startup config: map[allowed_apns:.* api_address::8080 association_setup_timeout:5 denied_apns: far_map_size:0 feature_ftup:false feature_ueip:false gtp_echo_interval:10 gtp_peer:[] heartbeat_interval:5 heartbeat_retries:3 heartbeat_timeout:5 interface_name:[eth0] ip6_ra_prefix:2a03:d000:29a0:509::/64 ip6_ra_support:false logging_caller:false logging_level:debug max_sessions:65535 metrics_address::9090 n3_address:172.16.0.2 n3_adv_address:172.16.0.2 n3_adv_address_5g:172.16.0.2 n9_address:172.16.0.2 n9_adv_address:172.16.0.2 pa_address:127.0.0.1 pdr_map_size:0 pfcp_address:172.16.0.2:8805 pfcp_node_id:172.16.0.2 pfcp_profile:default pfcp_remote_node:[] qci_dscp_mapping:map[] qer_map_size:0 s1u_address:127.0.0.1 s5s8_address:127.0.0.1 sxa_address: sxa_node_id:127.0.0.2 sxa_remote_node:[] sxb_address: sxb_node_id:127.0.0.3 sxb_remote_node:[] teid_pool:65535 trace_association:true trace_blocked:false trace_files:10 trace_heartbeat:false trace_in:true trace_max_packets:100000 trace_max_size:10485760 trace_out:true ueip_pool:10.60.0.0/24 urr_map_size:0 xdp_attach_mode:generic]"}
+{"level":"debug","time":"2026-11-09T11:15:37Z","message":"PCC config file not found. Using defaults"}
+2026/11/09 11:15:37 Apply eUPF config: {InterfaceName:[eth0] XDPAttachMode:generic ApiAddress::8080 PfcpAddress:172.16.0.2:8805 PfcpNodeId:172.16.0.2 PfcpRemoteNode:[] SxaRemoteNode:[] SxbRemoteNode:[] SxaLocalAddress: SxbLocalAddress: SxaLocalNodeId:127.0.0.2 SxbLocalNodeId:127.0.0.3 AssociationSetupTimeout:5 MetricsAddress::9090 N3Address:172.16.0.2 N9Address:172.16.0.2 N3AdvertisedAddress:172.16.0.2 N3AdvertisedAddress5G:172.16.0.2 N9AdvertisedAddress:172.16.0.2 S1UAddress:127.0.0.1 S5S8Address:127.0.0.1 PAAddress:127.0.0.1 GtpPeer:[] GtpEchoInterval:10 QerMapSize:65535 FarMapSize:131070 UrrMapSize:131070 PdrMapSize:131070 MaxSessions:65535 HeartbeatRetries:3 HeartbeatInterval:5 HeartbeatTimeout:5 LoggingLevel:debug LoggingCaller:false UEIPPool: FTEIDPool:0 FeatureUEIP:false FeatureFTUP:false Qci2DscpMapping:map[] AllowedApns:.* DeniedApns: PfcpProfile:default TraceAssociation:true TraceHeartbeat:false TraceIn:true TraceOut:true TraceBlocked:false TraceMaxDumpFiles:10 TraceMaxDumpSize:10485760 TraceMaxDumpPackets:100000 IP6RaSupport:false Ip6RaPrefix:2a03:d000:29a0:509::/64 n3AdvertisedAddress5G:[0 0 0 0 0 0 0 0 0 0 255 255 172 16 0 2]}
+2026/11/09 11:15:37 DBG Loaded map pdr_map_downlink_ip6
+2026/11/09 11:15:37 DBG Loaded map pdr_map_teid_ip4
+2026/11/09 11:15:37 DBG Loaded map urr_map
+2026/11/09 11:15:37 DBG Loaded map qer_map
+2026/11/09 11:15:37 DBG Loaded map far_map
+2026/11/09 11:15:37 DBG Loaded map pdr_map_downlink_ip4
+2026/11/09 11:15:38 INF Attached XDP program to iface "eth0" (index 2)
+2026/11/09 11:15:38 INF Initialize resources: UEIP pool (CIDR: ""), TEID pool (size: 0)
+2026/11/09 11:15:38 INF Starting PFCP connection: 172.16.0.2:8805 with Node ID: 172.16.0.2, N3 address: 172.16.0.2, N9 address: 172.16.0.2
+2026/11/09 11:15:38 INF loaded pcc rules map []
+2026/11/09 11:15:38 INF create pcc rules map map[]
+2026/11/09 11:15:38 INF Sxa connection skipped (sxa_address not configured)
+2026/11/09 11:15:38 INF Sxb connection skipped (sxb_address not configured)
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
 
-curl -i http://172.16.0.2:8080/api/v1/health
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /api/v1/health            --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).InitRoutes.func1 (4 handlers)
+[GIN-debug] GET    /api/v1/xdp_stats         --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).displayXdpStatistics-fm (4 handlers)
+[GIN-debug] GET    /api/v1/packet_stats      --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).displayPacketStats-fm (4 handlers)
+[GIN-debug] GET    /api/v1/route_stats       --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).displayRouteStats-fm (4 handlers)
+[GIN-debug] GET    /api/v1/config            --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).displayConfig-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/logging_level --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editLoggingLevelConfig-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/logging_caller --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editLoggingCallerConfig-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/dataplane_ebpf --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editDataPlaneConfig-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/dataplane_addresses --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editDataPlaneAddressesConfig-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/pfcp_n4    --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editPFCPN4Config-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/pfcp_sxa   --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editPFCPSxaConfig-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/pfcp_sxb   --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editPFCPSxbConfig-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/pfcp_timers --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editPFCPTimersConfig-fm (4 handlers)
+[GIN-debug] POST   /api/v1/config/gtp_path   --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).editGTPPathConfig-fm (4 handlers)
+[GIN-debug] GET    /api/v1/uplink_pdr_map/:id --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).getUplinkPdrValue-fm (4 handlers)
+[GIN-debug] PUT    /api/v1/uplink_pdr_map/:id --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).setUplinkPdrValue-fm (4 handlers)
+[GIN-debug] GET    /api/v1/downlink_pdr_map/:id --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).getDownlinkPdrValue-fm (4 handlers)
+[GIN-debug] PUT    /api/v1/downlink_pdr_map/:id --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).setDownlinkPdrValue-fm (4 handlers)
+[GIN-debug] GET    /api/v1/qer_map           --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).listQerMapContent-fm (4 handlers)
+[GIN-debug] GET    /api/v1/qer_map/:id       --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).getQerValue-fm (4 handlers)
+[GIN-debug] PUT    /api/v1/qer_map/:id       --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).setQerValue-fm (4 handlers)
+[GIN-debug] GET    /api/v1/far_map/:id       --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).getFarValue-fm (4 handlers)
+[GIN-debug] PUT    /api/v1/far_map/:id       --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).setFarValue-fm (4 handlers)
+[GIN-debug] GET    /api/v1/pfcp_associations --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).listPfcpAssociations-fm (4 handlers)
+[GIN-debug] GET    /api/v1/pfcp_associations/full --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).listPfcpAssociationsFull-fm (4 handlers)
+[GIN-debug] GET    /api/v1/pfcp_associations/release --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).pfcpAssociationRelease-fm (4 handlers)
+[GIN-debug] GET    /api/v1/pfcp_sessions     --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).listPfcpSessionsFiltered-fm (4 handlers)
+[GIN-debug] DELETE /api/v1/pfcp_sessions     --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).deletePfcpSessions-fm (4 handlers)
+[GIN-debug] GET    /api/v1/subscriber_trace  --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).listTraces-fm (4 handlers)
+[GIN-debug] POST   /api/v1/subscriber_trace  --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).startTrace-fm (4 handlers)
+[GIN-debug] DELETE /api/v1/subscriber_trace  --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).stopTrace-fm (4 handlers)
+[GIN-debug] GET    /swagger/*any             --> github.com/swaggo/gin-swagger.CustomWrapHandler.func1 (4 handlers)
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /metrics                  --> github.com/edgecomllc/eupf/cmd/api/rest.(*ApiHandler).InitMetricsRoute.(*ApiHandler).InitMetricsRoute.func1.func2 (4 handlers)
+2026/11/09 11:15:38 INF running on :9090
+2026/11/09 11:15:38 INF running on :8080
+2026/11/09 11:15:43 DBG pfcp address: 172.16.0.2:8805
+2026/11/09 11:15:48 DBG gpt path manage trigger
+2026/11/09 11:15:48 DBG pfcp address: 172.16.0.2:8805
+2026/11/09 11:15:53 DBG pfcp address: 172.16.0.2:8805
+2026/11/09 11:15:58 DBG gpt path manage trigger
+2026/11/09 11:15:58 DBG pfcp address: 172.16.0.2:8805
+2026/11/09 11:16:03 DBG pfcp address: 172.16.0.2:8805
+2026/11/09 11:16:08 DBG gpt path manage trigger
+2026/11/09 11:16:08 DBG pfcp address: 172.16.0.2:8805
+2026/11/09 11:16:13 DBG pfcp address: 172.16.0.2:8805
+
+
+"OK"root@ubuntu-fc-uvm:~# curl -s http://172.16.0.2:9090/metrics | head -5
+# HELP go_gc_duration_seconds A summary of the wall-time pause (stop-the-world) duration in garbage collection cycles.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 7.9218e-05
+go_gc_duration_seconds{quantile="0.25"} 7.9218e-05
+go_gc_duration_seconds{quantile="0.5"} 9.2169e-05
+root@ubuntu-fc-uvm:~# curl -i http://172.16.0.2:8080/api/v1/health
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Mon, 09 Nov 2026 11:21:43 GMT
+Content-Length: 4
