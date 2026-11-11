@@ -1,0 +1,51 @@
+# Stop any running Firecracker process
+sudo pkill -f firecracker
+sleep 1
+sudo pkill -9 -f firecracker 2>/dev/null
+
+# Remove the control sockets left in /tmp
+sudo rm -f /tmp/firecracker-*.socket
+
+# Remove the TAP devices and the bridge
+sudo ip link del tap0 2>/dev/null
+sudo ip link del tap1 2>/dev/null
+sudo ip link del br0 2>/dev/null
+
+# Remove the NAT and forwarding rules added in section 6
+HOST_IFACE=$(ip route show default | awk '/default/ {print $5; exit}')
+sudo iptables -t nat -D POSTROUTING -s 172.16.0.0/24 -o "$HOST_IFACE" -j MASQUERADE 2>/dev/null
+sudo iptables -D FORWARD -i br0 -o "$HOST_IFACE" -j ACCEPT 2>/dev/null
+sudo iptables -D FORWARD -i "$HOST_IFACE" -o br0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null
+
+# Turn IP forwarding back off (skip this line if Docker or another tool needs it)
+sudo sysctl -w net.ipv4.ip_forward=0
+
+# Remove the NetworkManager exception file, if it still exists
+sudo rm -f /etc/NetworkManager/conf.d/99-microvm-unmanaged.conf
+sudo systemctl daemon-reload
+sudo systemctl reload NetworkManager 2>/dev/null
+
+# Remove the Firecracker binaries installed in /usr/local/bin, if any
+sudo rm -f /usr/local/bin/firecracker /usr/local/bin/jailer
+
+# Remove the downloaded archive from /tmp, if it exists
+rm -f /tmp/firecracker.tgz
+
+# Remove the whole lab folder: firecracker, kernel_rootfs, the built kernel, images, keys, and the eUPF source
+# To keep the built kernel and the images, comment out the next line
+rm -rf ~/Desktop/microVMs
+
+# Remove the sudo-created image folders left under the lab folder, if any were created elsewhere
+sudo rm -rf /firecracker 2>/dev/null
+
+# Check: no Firecracker process should be listed
+pgrep -af firecracker || echo "no firecracker process"
+
+# Check: no bridge or TAP device should be listed
+ip -br link | grep -E 'br0|tap' || echo "no bridge or tap devices"
+
+# Check: the NAT rule should be gone
+sudo iptables -t nat -S POSTROUTING | grep 172.16.0.0 || echo "no NAT rule for 172.16.0.0/24"
+
+# Check: the lab folder should be gone
+ls -d ~/Desktop/microVMs 2>/dev/null || echo "lab folder removed"
