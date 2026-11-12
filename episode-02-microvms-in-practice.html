@@ -1051,10 +1051,8 @@ tar xf "$LATEST"
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
 <pre># Store the path of the extracted source folder
 SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
-# Show the source folder, to check it
-echo "$SRC"
-# Copy the config of the running upf-uvm kernel into the source folder, only if the copy works (upf-uvm must be running)
-ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key -o StrictHostKeyChecking=accept-new root@172.16.0.2 'zcat /proc/config.gz' &gt; "$SRC/.config.tmp" &amp;&amp; mv "$SRC/.config.tmp" "$SRC/.config"
+# Copy the config of the running upf-uvm kernel into the source folder (upf-uvm must be running)
+ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key root@172.16.0.2 'zcat /proc/config.gz' &gt; "$SRC/.config"
 # Check the number of lines, which should be around 3900
 wc -l "$SRC/.config"
 </pre>
