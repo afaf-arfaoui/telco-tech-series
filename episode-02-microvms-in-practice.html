@@ -1036,52 +1036,71 @@ sudo apt install -y build-essential flex bison libelf-dev libssl-dev bc dwarves 
 cd ~/Desktop/microVMs
 # Find the newest 6.18 release file name on kernel.org
 LATEST=$(curl -s https://cdn.kernel.org/pub/linux/kernel/v6.x/ | grep -o 'linux-6\.18\.[0-9]*\.tar\.xz' | sort -V | uniq | tail -1)
+# Show the file name that was found
+echo "$LATEST"
 # Download the newest 6.18 source archive
 curl -fLO "https://cdn.kernel.org/pub/linux/kernel/v6.x/$LATEST"
 # Extract the source archive
 tar xf "$LATEST"
-# Store the path of the extracted source folder
-SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)</pre>
+</pre>
     </div>
     <div class="body-copy">
       <p>Copy the running config from <code>upf-uvm</code>, which must be running on the CI kernel:</p>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Copy the config of the running upf-uvm kernel into the source folder
-ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key root@172.16.0.2 'zcat /proc/config.gz' &gt; "$SRC/.config"</pre>
+<pre># Store the path of the extracted source folder
+SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
+# Show the source folder, to check it
+echo "$SRC"
+# Copy the config of the running upf-uvm kernel into the source folder, only if the copy works (upf-uvm must be running)
+ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key -o StrictHostKeyChecking=accept-new root@172.16.0.2 'zcat /proc/config.gz' &gt; "$SRC/.config.tmp" &amp;&amp; mv "$SRC/.config.tmp" "$SRC/.config"
+# Check the number of lines, which should be around 3900
+wc -l "$SRC/.config"
+</pre>
     </div>
     <div class="body-copy">
       <p>Enable the eBPF and tracing options, then check them:</p>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Move into the kernel source folder
+<pre># Store the path of the extracted source folder
+SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
+# Move into the kernel source folder
 cd "$SRC"
 # Turn on the eBPF and tracing options
 scripts/config --disable DEBUG_INFO_NONE --enable BPF --enable BPF_SYSCALL --enable BPF_JIT --enable BPF_EVENTS --enable KPROBES --enable KPROBE_EVENTS --enable FTRACE --enable TRACING --enable PERF_EVENTS --enable XDP_SOCKETS --enable CGROUP_BPF --enable DEBUG_INFO --enable DEBUG_INFO_DWARF5 --enable DEBUG_INFO_BTF
 # Fill in the options that the newer source added
 make olddefconfig
 # Check that the key options are set to y
-grep -E '^CONFIG_(BPF_SYSCALL|BPF_EVENTS|DEBUG_INFO_BTF)=' .config</pre>
+grep -E '^CONFIG_(BPF_SYSCALL|BPF_EVENTS|DEBUG_INFO_BTF)=' .config
+</pre>
     </div>
     <div class="body-copy">
       <p>Build the kernel:</p>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Move into the kernel source folder
+<pre># Store the path of the extracted source folder
+SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
+# Move into the kernel source folder
 cd "$SRC"
 # Build the kernel image
-make -j"$(nproc)" vmlinux</pre>
+make -j"$(nproc)" vmlinux
+</pre>
     </div>
     <div class="body-copy">
       <p>Copy the kernel into the <code>kernel_rootfs</code> folder:</p>
     </div>
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
-<pre># Copy the built kernel into kernel_rootfs
-cp "$SRC/vmlinux" ~/Desktop/microVMs/kernel_rootfs/vmlinux-6.18-btf</pre>
+<pre># Store the path of the extracted source folder
+SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
+# Copy the built kernel into kernel_rootfs
+cp "$SRC/vmlinux" ~/Desktop/microVMs/kernel_rootfs/vmlinux-6.18-btf
+# Check that the file exists
+ls -lh ~/Desktop/microVMs/kernel_rootfs/vmlinux-6.18-btf
+</pre>
     </div>
       </div>
     </div>
