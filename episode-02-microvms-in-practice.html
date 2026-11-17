@@ -1050,10 +1050,12 @@ tar xf "$LATEST"
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
 <pre># Store the path of the extracted source folder
-SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
+SRC=$(find ~/Desktop/microVMs -maxdepth 1 -type d -name 'linux-6.18.*' | sort -V | tail -1)
+# Remove the old host key of upf-uvm, which changes when the VM is rebuilt
+ssh-keygen -R 172.16.0.2
 # Copy the config of the running upf-uvm kernel into the source folder (upf-uvm must be running)
-ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key root@172.16.0.2 'zcat /proc/config.gz' &gt; "$SRC/.config"
-# Check the number of lines, which should be around 3900
+ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key -o StrictHostKeyChecking=accept-new root@172.16.0.2 'zcat /proc/config.gz' &gt; "$SRC/.config.tmp" &amp;&amp; mv "$SRC/.config.tmp" "$SRC/.config"
+# Check the number of lines, which should be around 3930
 wc -l "$SRC/.config"
 </pre>
     </div>
@@ -1063,7 +1065,7 @@ wc -l "$SRC/.config"
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
 <pre># Store the path of the extracted source folder
-SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
+SRC=$(find ~/Desktop/microVMs -maxdepth 1 -type d -name 'linux-6.18.*' | sort -V | tail -1)
 # Move into the kernel source folder
 cd "$SRC"
 # Turn on the eBPF and tracing options
@@ -1080,7 +1082,7 @@ grep -E '^CONFIG_(BPF_SYSCALL|BPF_EVENTS|DEBUG_INFO_BTF)=' .config
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
 <pre># Store the path of the extracted source folder
-SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
+SRC=$(find ~/Desktop/microVMs -maxdepth 1 -type d -name 'linux-6.18.*' | sort -V | tail -1)
 # Move into the kernel source folder
 cd "$SRC"
 # Build the kernel image
@@ -1093,7 +1095,7 @@ make -j"$(nproc)" vmlinux
     <div class="codebox">
       <div class="code-head"><span>host shell</span><button class="copy-btn">Copy</button></div>
 <pre># Store the path of the extracted source folder
-SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
+SRC=$(find ~/Desktop/microVMs -maxdepth 1 -type d -name 'linux-6.18.*' | sort -V | tail -1)
 # Copy the built kernel into kernel_rootfs
 cp "$SRC/vmlinux" ~/Desktop/microVMs/kernel_rootfs/vmlinux-6.18-btf
 # Check that the file exists
