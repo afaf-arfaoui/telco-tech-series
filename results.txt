@@ -1,1 +1,1 @@
-      <li id="ref-3" style="margin-bottom:14px; padding-left:38px; text-indent:-38px;">[3] Firecracker guest kernel 6.18 with BPF and BTF, built for this episode. <a href="https://github.com/<your-user>/firecracker-kernel-6.18-btf" target="_blank" rel="noopener noreferrer">github.com/&lt;your-user&gt;/firecracker-kernel-6.18-btf</a></li>
+
