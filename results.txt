@@ -1,3 +1,10 @@
 ssh-keygen -R 172.16.0.2
 ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key -o StrictHostKeyChecking=accept-new root@172.16.0.2 'zcat /proc/config.gz' > "$SRC/.config.tmp" && mv "$SRC/.config.tmp" "$SRC/.config"
 wc -l "$SRC/.config"
+# Host 172.16.0.2 found: line 1
+# Host 172.16.0.2 found: line 2
+# Host 172.16.0.2 found: line 3
+/home/afaf-a/.ssh/known_hosts updated.
+Original contents retained as /home/afaf-a/.ssh/known_hosts.old
+Warning: Permanently added '172.16.0.2' (ED25519) to the list of known hosts.
+3930 /home/afaf-a/Desktop/microVMs/linux-6.18.63/.config
