@@ -1,11 +1,4 @@
- Store the path of the extracted source folder
-SRC=$(ls -d ~/Desktop/microVMs/linux-6.18.* | sort -V | tail -1)
-# Show the source folder, to check it
+SRC=$(find ~/Desktop/microVMs -maxdepth 1 -type d -name 'linux-6.18.*' | sort -V | tail -1)
 echo "$SRC"
-# Copy the config of the running upf-uvm kernel into the source folder, only if the copy works (upf-uvm must be running)
 ssh -i ~/Desktop/microVMs/kernel_rootfs/upf-uvm-key -o StrictHostKeyChecking=accept-new root@172.16.0.2 'zcat /proc/config.gz' > "$SRC/.config.tmp" && mv "$SRC/.config.tmp" "$SRC/.config"
-# Check the number of lines, which should be around 3900
 wc -l "$SRC/.config"
-/home/afaf-a/Desktop/microVMs/linux-6.18.63.tar.xz
-bash: /home/afaf-a/Desktop/microVMs/linux-6.18.63.tar.xz/.config.tmp: Not a directory
-wc: /home/afaf-a/Desktop/microVMs/linux-6.18.63.tar.xz/.config: Not a directory
