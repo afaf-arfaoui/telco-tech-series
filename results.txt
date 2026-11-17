@@ -1,24 +1,3 @@
 SRC=$(find ~/Desktop/microVMs -maxdepth 1 -type d -name 'linux-6.18.*' | sort -V | tail -1)
 cd "$SRC"
-scripts/config --disable DEBUG_INFO_NONE --enable BPF --enable BPF_SYSCALL --enable BPF_JIT --enable BPF_EVENTS --enable KPROBES --enable KPROBE_EVENTS --enable FTRACE --enable TRACING --enable PERF_EVENTS --enable XDP_SOCKETS --enable CGROUP_BPF --enable DEBUG_INFO --enable DEBUG_INFO_DWARF5 --enable DEBUG_INFO_BTF
-make olddefconfig
-grep -E '^CONFIG_(BPF_SYSCALL|BPF_EVENTS|DEBUG_INFO_BTF)=' .config
-  HOSTCC  scripts/basic/fixdep
-  HOSTCC  scripts/kconfig/conf.o
-  HOSTCC  scripts/kconfig/confdata.o
-  HOSTCC  scripts/kconfig/expr.o
-  LEX     scripts/kconfig/lexer.lex.c
-  YACC    scripts/kconfig/parser.tab.[ch]
-  HOSTCC  scripts/kconfig/lexer.lex.o
-  HOSTCC  scripts/kconfig/menu.o
-  HOSTCC  scripts/kconfig/parser.tab.o
-  HOSTCC  scripts/kconfig/preprocess.o
-  HOSTCC  scripts/kconfig/symbol.o
-  HOSTCC  scripts/kconfig/util.o
-  HOSTLD  scripts/kconfig/conf
-#
-# configuration written to .config
-#
-CONFIG_BPF_SYSCALL=y
-CONFIG_DEBUG_INFO_BTF=y
-CONFIG_BPF_EVENTS=y
+make -j"$(nproc)" vmlinux
