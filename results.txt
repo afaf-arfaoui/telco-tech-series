@@ -1,1 +1,4 @@
-
+cd ~/Desktop/microVMs/kernel_rootfs
+gzip -9 -k vmlinux-6.18-btf
+sha256sum vmlinux-6.18-btf.gz > vmlinux-6.18-btf.gz.sha256
+ls -lh vmlinux-6.18-btf.gz vmlinux-6.18-btf.gz.sha256
