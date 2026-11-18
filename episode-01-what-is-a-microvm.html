@@ -260,10 +260,13 @@
     <a class="rm-node" href="index.html" style="text-decoration:none; color:inherit;"><div class="rm-dot">00</div><div class="rm-lbl">Home</div></a>
     <div class="rm-node current"><div class="rm-dot">01</div><div class="rm-lbl">MicroVM in theory</div></div>
     <a class="rm-node" href="episode-02-microvms-in-practice.html" style="text-decoration:none; color:inherit;"><div class="rm-dot">02</div><div class="rm-lbl">MicroVM in practice</div></a>
-    <div class="rm-node"><div class="rm-dot">03</div><div class="rm-lbl">Automate w/ agent</div></div>
-    <div class="rm-node"><div class="rm-dot">04–7</div><div class="rm-lbl">UPF / eBPF</div></div>
-    <div class="rm-node"><div class="rm-dot">08</div><div class="rm-lbl">Deploy eUPF</div></div>
-    <div class="rm-node"><div class="rm-dot">09</div><div class="rm-lbl">Monitor</div></div>
+    <a class="rm-node" href="episode-03-deployment-with-an-ai-agent.html" style="text-decoration:none; color:inherit;"><div class="rm-dot">03</div><div class="rm-lbl">Deployment with an AI agent</div></a>
+    <div class="rm-node"><div class="rm-dot">04</div><div class="rm-lbl">What is a UPF?</div></div>
+    <div class="rm-node"><div class="rm-dot">05</div><div class="rm-lbl">Basic eBPF</div></div>
+    <div class="rm-node"><div class="rm-dot">06</div><div class="rm-lbl">Inside the eUPF</div></div>
+    <div class="rm-node"><div class="rm-dot">07</div><div class="rm-lbl">Make the microVM useful</div></div>
+    <div class="rm-node"><div class="rm-dot">08</div><div class="rm-lbl">Deploying the AI agent</div></div>
+    <div class="rm-node"><div class="rm-dot">09</div><div class="rm-lbl">Monitoring the deployment</div></div>
   </div>
 </div>
 
@@ -289,7 +292,7 @@
   </div>
 
   <div class="video-wrap">
-<iframe id="odysee-iframe" style="width:100%; aspect-ratio:16 / 9;" src="#" allowfullscreen></iframe>
+<iframe id="odysee-iframe" style="width:100%; aspect-ratio:16 / 9;" allowfullscreen></iframe>
   </div>
 
   <section class="tracked" id="sec-intro">
@@ -366,7 +369,6 @@
 
     <div class="crsl-slides" id="crslSlides">
 
-      <!-- ============================= SLIDE 1: VM / KVM architecture ============================= -->
       <div class="crsl-slide" data-title="VM / KVM architecture" data-replay-id="vmd4Replay">
 
         <div class="vmd4-widget" id="vmd4Widget">
@@ -374,13 +376,11 @@
           <div class="vmd4-canvas">
             <svg viewBox="0 0 1000 600" id="vmd4Svg" role="img" aria-label="Diagram of two guest VMs, each managed by a QEMU VMM process, calling into the host kernel's KVM module, which runs guest code on hardware with VT-x/AMD-V and EPT">
 
-              <!-- step 0: Hardware -->
               <g id="vmd4-hardware" class="vmd4-reveal">
                 <rect x="40" y="520" width="920" height="60" rx="8" class="vmd4-fill-ink"/>
                 <text x="500" y="555" text-anchor="middle" class="vmd4-label vmd4-invert">Hardware (CPU with VT-x / AMD-V + EPT)</text>
               </g>
 
-              <!-- step 1: Host kernel shell + KVM module (together) -->
               <g id="vmd4-hostkernel" class="vmd4-reveal">
                 <rect x="40" y="340" width="920" height="140" rx="10" class="vmd4-fill-white"/>
                 <text x="500" y="364" text-anchor="middle" class="vmd4-label vmd4-label-strong">Host kernel</text>
@@ -391,13 +391,11 @@
                 <text x="500" y="430" text-anchor="middle" class="vmd4-label">Exposes the /dev/kvm ioctl interface</text>
               </g>
 
-              <!-- step 2: host kernel -> hardware arrow -->
               <g id="vmd4-hwArrow" class="vmd4-reveal">
                 <line x1="500" y1="454" x2="500" y2="518" class="vmd4-line-red" marker-end="url(#vmd4-arrow-red)"/>
                 <text x="520" y="500" class="vmd4-label">Guest-mode execution</text>
               </g>
 
-              <!-- step 3: VM outer shells -->
               <g id="vmd4-vmOuter" class="vmd4-reveal">
                 <rect x="40" y="20" width="330" height="250" rx="10" class="vmd4-fill-paper"/>
                 <text x="205" y="46" text-anchor="middle" class="vmd4-label vmd4-label-strong">VMM process (e.g., QEMU)</text>
@@ -406,9 +404,7 @@
                 <text x="795" y="46" text-anchor="middle" class="vmd4-label vmd4-label-strong">VMM process (e.g., QEMU)</text>
               </g>
 
-              <!-- step 4: VM internals (both sides) -->
               <g id="vmd4-vmInner" class="vmd4-reveal">
-                <!-- left -->
                 <text x="60" y="88" class="vmd4-label vmd4-label-red vmd4-label-strong">Guest VM</text>
                 <rect x="52" y="96" width="306" height="158" rx="6" class="vmd4-dashed-red"/>
                 <rect x="64" y="112" width="136" height="34" rx="4" class="vmd4-fill-rule"/><text x="132" y="134" text-anchor="middle" class="vmd4-label">App 1</text>
@@ -417,7 +413,6 @@
                 <rect x="210" y="152" width="136" height="46" rx="4" class="vmd4-fill-paper"/><text x="278" y="171" text-anchor="middle" class="vmd4-label">Bins/</text><text x="278" y="187" text-anchor="middle" class="vmd4-label">Libs</text>
                 <rect x="64" y="204" width="282" height="42" rx="4" class="vmd4-fill-white"/><text x="205" y="229" text-anchor="middle" class="vmd4-label vmd4-label-strong">Guest OS Kernel</text>
 
-                <!-- right -->
                 <text x="650" y="88" class="vmd4-label vmd4-label-red vmd4-label-strong">Guest VM</text>
                 <rect x="642" y="96" width="306" height="158" rx="6" class="vmd4-dashed-red"/>
                 <rect x="654" y="112" width="136" height="34" rx="4" class="vmd4-fill-rule"/><text x="722" y="134" text-anchor="middle" class="vmd4-label">App 1</text>
@@ -427,7 +422,6 @@
                 <rect x="654" y="204" width="282" height="42" rx="4" class="vmd4-fill-white"/><text x="795" y="229" text-anchor="middle" class="vmd4-label vmd4-label-strong">Guest OS Kernel</text>
               </g>
 
-              <!-- step 5: ioctl arrows (vertical, stop at box edges) -->
               <g id="vmd4-ioctl" class="vmd4-reveal">
                 <line x1="205" y1="270" x2="205" y2="339" class="vmd4-line-red" marker-end="url(#vmd4-arrow-red)"/>
                 <text x="185" y="308" text-anchor="end" class="vmd4-label">ioctl calls</text>
@@ -436,7 +430,6 @@
                 <text x="815" y="308" text-anchor="start" class="vmd4-label">ioctl calls</text>
               </g>
 
-              <!-- step 6: vCPU connector (horizontal) -->
               <g id="vmd4-vcpu" class="vmd4-reveal">
                 <line x1="358" y1="155" x2="642" y2="155" class="vmd4-line-dashed-red" marker-start="url(#vmd4-arrow-red-l)" marker-end="url(#vmd4-arrow-red-r)"/>
                 <rect x="425" y="132" width="150" height="52" class="vmd4-note-bg"/>
@@ -611,7 +604,6 @@
 
       </div>
 
-      <!-- ============================= SLIDE 2: Guest mode (VM exit / entry) ============================= -->
       <div class="crsl-slide" data-title="Guest mode: VM exit / entry" data-replay-id="gmReplay">
 
         <div class="gm-widget" id="gmWidget">
@@ -619,7 +611,6 @@
           <div class="gm-canvas">
             <svg viewBox="0 0 1000 560" id="gmSvg" role="img" aria-label="Diagram showing the CPU switching between guest mode, where guest instructions run natively, and the host, which handles a VM exit before resuming the guest. This example traces one specific cause, an I/O port access, which KVM decodes and the VMM emulates; a timer interrupt would instead be resolved by the host's own scheduler, with no emulation step at all">
 
-              <!-- structural reveal 1: CPU core outer shell -->
               <g id="gm-outer" class="gm-reveal">
                 <rect x="40" y="20" width="920" height="500" rx="10" class="gm-fill-paper"/>
                 <text x="60" y="44" class="gm-label gm-label-strong">CPU core, VT-x / AMD-V</text>
@@ -632,7 +623,6 @@
                 <text x="500" y="514" text-anchor="middle" id="gm-status" class="gm-label gm-status-text">native execution: guest instructions run directly on the CPU</text>
               </g>
 
-              <!-- structural reveal 2: guest mode box -->
               <g id="gm-guest" class="gm-reveal">
                 <rect x="70" y="76" width="860" height="150" rx="8" class="gm-dashed-red"/>
                 <text x="90" y="104" class="gm-label gm-label-red gm-label-strong">Guest mode (non-root operation)</text>
@@ -641,7 +631,6 @@
                 <rect id="gm-scanhead" x="110" y="126" width="14" height="40" class="gm-scanhead"/>
               </g>
 
-              <!-- structural reveal 3: host / root-operation box (same visual style as guest mode) -->
               <g id="gm-hyper" class="gm-reveal">
                 <rect x="70" y="266" width="860" height="200" rx="8" class="gm-dashed-red"/>
                 <text x="90" y="294" class="gm-label gm-label-red gm-label-strong">Host (root operation)</text>
@@ -665,7 +654,6 @@
                 <text x="765" y="374" text-anchor="middle" class="gm-label gm-label-small">KVM: resume the guest</text>
               </g>
 
-              <!-- VM EXIT / VM ENTRY arrows drawn LAST so they paint on top of the boxes, not behind them -->
               <g id="gm-exit-arrow" class="gm-blink">
                 <line x1="250" y1="226" x2="250" y2="264" class="gm-line-red" marker-end="url(#gm-arrow-red)"/>
                 <text x="270" y="250" class="gm-label gm-label-red gm-label-strong">VM EXIT</text>
@@ -955,7 +943,6 @@
 
       </div>
 
-      <!-- ============================= SLIDE 3: EPT / NPT memory boundary ============================= -->
       <div class="crsl-slide" data-title="EPT / NPT: the memory boundary" data-replay-id="epReplay">
 
         <div class="ep-widget" id="epWidget">
@@ -963,7 +950,6 @@
           <div class="ep-canvas">
             <svg viewBox="0 0 1000 460" id="epSvg" role="img" aria-label="Diagram showing a normal memory access translated in two steps from the program's address to the real RAM address, and a second access that gets denied at the hardware checkpoint">
 
-              <!-- structural reveal 1: outer frame -->
               <g id="ep-outer" class="ep-reveal">
                 <rect x="40" y="20" width="920" height="420" rx="10" class="ep-fill-paper"/>
                 <text x="60" y="44" class="ep-label ep-label-strong">Address translation: guest → host</text>
@@ -973,7 +959,6 @@
                 <text x="500" y="422" text-anchor="middle" class="ep-label ep-label-small">EPT = Extended Page Tables (Intel) &nbsp;&middot;&nbsp; NPT = Nested Page Tables (AMD)</text>
               </g>
 
-              <!-- structural reveal 2: row A (normal access) -->
               <g id="ep-rowA" class="ep-reveal">
                 <text x="60" y="76" class="ep-label ep-label-strong">Normal access</text>
 
@@ -1010,7 +995,6 @@
                 <text x="825" y="160" text-anchor="middle" class="ep-label ep-label-small">(HPA)</text>
               </g>
 
-              <!-- structural reveal 3: row B (blocked access) -->
               <g id="ep-rowB" class="ep-reveal">
                 <text x="60" y="210" class="ep-label ep-label-strong">Access outside the mapped region</text>
 
@@ -1043,7 +1027,6 @@
                 <text x="775" y="292" text-anchor="middle" class="ep-label ep-label-small">hardware checkpoint</text>
               </g>
 
-              <!-- chips travel on top of both rows -->
               <g id="ep-chipA-pos" class="ep-chip-pos" transform="translate(0,0)">
                 <g id="ep-chipA" class="ep-chip">
                   <rect class="ep-chip-rect" width="92" height="26" rx="6"/>
@@ -1458,7 +1441,6 @@
 </script>
 
 </div>
-<!-- =================== END DIAGRAMS CAROUSEL =================== -->
     <div class="body-copy" style="margin-top:0;">
       <p>In Fig. 1, the stack reads bottom-up as "who talks with what"</p>
       <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
@@ -1525,7 +1507,7 @@
     <div class="sub-heading">How do containers work?</div>
       <div class="body-copy" style="margin-top:0;">
       <p>The mechanism of containers is completely different from that of VMs. Containers do not rely on hardware virtualization, 
-        instead they are regular processes running under the <b>same kernel</b> as the host (depicted in Fig. 4 below), but made to seem isolated using kernel features:
+        instead they are regular processes running under the <b>same kernel</b> as the host (depicted in Fig. 4 below), but made to seem isolated using kernel features:</p>
 
       <div class="crsl-header" style="margin-bottom:8px;">
         <span class="crsl-title">Fig. 4 &middot; Container isolation: namespaces, cgroups and security mechanisms</span>
@@ -1538,33 +1520,27 @@
   <div class="ct-canvas">
     <svg viewBox="0 0 1000 660" id="ctSvg" role="img" aria-label="Diagram of two containers and a container runtime inside userspace, sitting on a host kernel whose namespaces, cgroups, and capabilities/seccomp/MAC mechanisms perform live operations against the containers, on top of shared hardware">
 
-      <!-- reveal 1: hardware, foundation, appears first -->
       <g id="ct-hardware" class="ct-reveal">
         <rect x="40" y="572" width="920" height="50" rx="8" class="ct-fill-ink"/>
         <text x="500" y="602" text-anchor="middle" class="ct-label ct-invert">Hardware (CPU, RAM, disk, NIC)</text>
       </g>
 
-      <!-- reveal 2: host kernel shell, empty -->
       <g id="ct-hostkernel-shell" class="ct-reveal">
         <rect x="40" y="382" width="920" height="162" rx="10" class="ct-fill-white"/>
         <text x="60" y="410" class="ct-label ct-label-strong">Host kernel</text>
       </g>
 
-      <!-- reveal 3: userspace shell, empty -->
       <g id="ct-userspace-shell" class="ct-reveal">
         <rect x="40" y="60" width="920" height="294" rx="10" class="ct-fill-paper"/>
         <text x="60" y="88" class="ct-label ct-label-strong">Userspace</text>
       </g>
 
-      <!-- reveal 4: container runtime box -->
       <g id="ct-runtime" class="ct-reveal">
         <rect x="140" y="284" width="720" height="54" rx="8" class="ct-fill-white"/>
         <text x="500" y="316" text-anchor="middle" class="ct-label ct-label-strong">Container runtime</text>
       </g>
 
-      <!-- reveal 5: the two containers, with contents -->
       <g id="ct-containers" class="ct-reveal">
-        <!-- left -->
         <text x="270" y="130" text-anchor="middle" class="ct-label ct-label-red ct-label-strong">Container</text>
         <rect x="70" y="140" width="400" height="116" rx="8" class="ct-dashed-red"/>
         <rect x="90" y="166" width="174" height="34" rx="4" class="ct-fill-rule"/><text x="177" y="188" text-anchor="middle" class="ct-label">App 1</text>
@@ -1572,7 +1548,6 @@
         <rect x="90" y="208" width="174" height="34" rx="4" class="ct-fill-paper"/><text x="177" y="230" text-anchor="middle" class="ct-label">Bins/Libs</text>
         <rect x="276" y="208" width="174" height="34" rx="4" class="ct-fill-paper"/><text x="363" y="230" text-anchor="middle" class="ct-label">Bins/Libs</text>
 
-        <!-- right -->
         <text x="730" y="130" text-anchor="middle" class="ct-label ct-label-red ct-label-strong">Container</text>
         <rect x="530" y="140" width="400" height="116" rx="8" class="ct-dashed-red"/>
         <rect x="550" y="166" width="174" height="34" rx="4" class="ct-fill-rule"/><text x="637" y="188" text-anchor="middle" class="ct-label">App 1</text>
@@ -1581,7 +1556,6 @@
         <rect x="736" y="208" width="174" height="34" rx="4" class="ct-fill-paper"/><text x="823" y="230" text-anchor="middle" class="ct-label">Bins/Libs</text>
       </g>
 
-      <!-- reveal 6: arrows from containers into the runtime -->
       <g id="ct-runtime-arrows" class="ct-reveal">
         <line x1="270" y1="256" x2="270" y2="282" class="ct-line-ink" marker-end="url(#ct-arrow-ink)"/>
         <text x="284" y="273" class="ct-label ct-label-small">start / stop / logs</text>
@@ -1589,13 +1563,11 @@
         <text x="744" y="273" class="ct-label ct-label-small">start / stop / logs</text>
       </g>
 
-      <!-- reveal 7: runtime -> host kernel, clone() setup -->
       <g id="ct-clone-arrow" class="ct-reveal">
         <line x1="500" y1="338" x2="500" y2="380" class="ct-line-ink" marker-end="url(#ct-arrow-ink)"/>
         <text x="520" y="364" class="ct-label ct-label-small">clone() with ns/cgroup setup</text>
       </g>
 
-      <!-- reveal 8: the 3 isolation mechanisms, empty shells -->
       <g id="ct-mechanisms" class="ct-reveal">
         <rect id="ct-ns" x="90" y="440" width="258" height="88" rx="6" class="ct-fill-paper"/>
         <text x="219" y="464" text-anchor="middle" class="ct-label ct-label-strong">Namespaces</text>
@@ -1615,7 +1587,6 @@
 
       <circle id="ct-pulse" r="5" class="ct-pulse" transform="translate(500,360)"/>
 
-      <!-- reveal 9: the process talks to the kernel directly once running; the runtime is not in this path -->
       <g id="ct-bypass-arrows" class="ct-reveal">
         <line x1="110" y1="256" x2="110" y2="380" class="ct-line-dashed-ink" marker-end="url(#ct-arrow-ink)"/>
         <text x="92" y="305" text-anchor="middle" transform="rotate(-90 92 305)" class="ct-label ct-label-small">direct syscalls</text>
@@ -1866,7 +1837,6 @@
 </script>
 
       </div>
-      <!-- =================== END CONTAINER ISOLATION ANIMATION =================== -->
       <p>Several Linux kernel mechanisms work together to produce this appearance of isolation, without any hardware virtualization involved:</p>
       <ul style="margin:0 0 16px; padding-left:20px; line-height:1.75;">
         <li style="margin-bottom:12px;"><strong>Namespaces</strong> give a process its own private view of a particular system 
@@ -1887,7 +1857,6 @@
         </li>
       </ul>
 
-
       <p>Because there is no firmware, device emulation, or separate kernel to boot, starting a container translates to just starting a process which takes milliseconds. 
         Unlike a VM, there is no guest kernel or emulated firmware to load into memory before anything else can run. A container's memory footprint is 
         simply whatever the application itself allocates, plus a thin runtime layer such as a small init process, rather than the tens to hundreds of 
@@ -1904,6 +1873,8 @@
 
       <div class="pull-quote">A virtual machine has a second, independent hardware check beneath the guest's own kernel. A container has no equivalent second layer beneath the one kernel it shares with everyone else.</div>
     </div>
+
+  </section>
 
   <section class="tracked" id="sec-deepdive">
   <div class="section-num">3. Why microVMs appeared?</div>
@@ -1933,7 +1904,6 @@
     and sends a webhook down to the bottom cell of that column, triggering a short lived function belonging to Customer A, while a grid representing 
     other customers' functions continuously spins instances up and down, all running on shared underlying hardware">
 
-      <!-- reveal 1: the grid of function cells -->
       <g id="faas-gridwrap" class="faas-reveal">
         <g id="faas-ambient"></g>
 
@@ -1944,13 +1914,11 @@
         </g>
       </g>
 
-      <!-- reveal 2: shared hardware -->
       <g id="faas-hardware" class="faas-reveal">
         <rect x="70" y="510" width="860" height="60" rx="8" class="faas-fill-ink"/>
         <text x="500" y="546" text-anchor="middle" class="faas-label faas-invert">Hardware (CPU, RAM, disk, NIC)</text>
       </g>
 
-      <!-- appears only for the duration of the webhook event -->
       <g id="faas-provider" class="faas-blink">
         <rect x="510" y="40" width="200" height="60" rx="8" class="faas-fill-white"/>
         <text x="610" y="66" text-anchor="middle" class="faas-label faas-label-strong">Payment</text>
@@ -2047,7 +2015,7 @@
     var n = 2;
     ROWS.forEach(function(y, ri){
       COLS.forEach(function(x, ci){
-        if(ri === 2 && ci === 2) return; // reserved for Customer A, bottom of the third column
+        if(ri === 2 && ci === 2) return;
         var dur = (1.8 + Math.random() * 1.6).toFixed(2);
         var delay = (Math.random() * 2.4).toFixed(2);
         var el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -2158,7 +2126,6 @@
 </script>
 
     </div>
-    <!-- =================== END FAAS ANIMATION =================== -->
 
     <p>This made it hard to satisfy two conflicting requirements:</p>
 
@@ -2259,7 +2226,6 @@
             queue requests into real host operations. It never has to imitate a specific NIC or disk controller chip.</li>
        </ul>
 
-
             <div class="diagram-wrap" style="margin-top:20px;">
 
               <div class="crsl-header" style="margin-bottom:8px;">
@@ -2271,7 +2237,6 @@
   <div class="vt-canvas">
     <svg viewBox="0 0 1000 560" id="vtSvg" role="img" aria-label="Diagram comparing full hardware emulation, where every individual access traps into the VMM separately, with virtio, where the guest writes a descriptor for each of three packets directly into a shared memory virtqueue and a single kick tells the VMM that all three are ready">
 
-      <!-- reveal 1: left column, full emulation -->
       <g id="vt-left" class="vt-reveal">
         <rect x="40" y="20" width="440" height="60" rx="8" class="vt-fill-white"/>
         <text x="260" y="56" text-anchor="middle" class="vt-label vt-label-strong">Guest</text>
@@ -2299,7 +2264,6 @@
         <text x="260" y="475" text-anchor="middle" class="vt-label vt-label-small">each access traps individually</text>
       </g>
 
-      <!-- reveal 2: right column, virtio -->
       <g id="vt-right" class="vt-reveal">
         <rect x="520" y="20" width="440" height="60" rx="8" class="vt-fill-white"/>
         <text x="740" y="56" text-anchor="middle" class="vt-label vt-label-strong">Guest</text>
@@ -2589,7 +2553,6 @@
 </script>
 
             </div>
-            <!-- =================== END VIRTIO VS. EMULATION ANIMATION =================== -->
 
       <div class="dig-deeper" style="margin-top:16px;">
         <button class="dig-toggle" id="digToggleIO"><span class="dig-icon">i</span>Further detail<span class="chev">›</span></button>
@@ -3055,7 +3018,7 @@
 
   const sideNavItems = document.querySelectorAll('.side-nav .sn-item');
   const trackedSections = Array.from(document.querySelectorAll('section.tracked'));
-  const ACTIVATION_LINE = 120; // px from top of viewport
+  const ACTIVATION_LINE = 120;
 
   const progressBar = document.getElementById('readProgress');
   function updateReadProgress(){
